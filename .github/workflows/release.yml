@@ -47,13 +47,28 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - name: Verify Flutter project
-        run: |
-          pwd
-          ls -la
-
+          
       - name: Restore pub packages
         run: |
             flutter pub get
       
           
+      - name: Create .env.prod
+        run: |
+          cat > .env.prod << EOF
+          COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
+          COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
+          COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
+          COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
+          EOF
+
+
+      - name: Analyze project
+        run: |
+            flutter analyze --no-fatal-infos
+            # flutter analyze
+
+
+      - name: Run tests
+        run: flutter test
+
