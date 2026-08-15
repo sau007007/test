@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    branches: [ "main" ]
+  
+  workflow_dispatch:
+
+permissions: 
+  contents: read
+
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        working-directory: app
+
+    permissions:
+      contents: read
+
+    env:
+      FLUTTER_VERSION: "3.41.9"
+      JAVA_VERSION: "21"
+
+
+    steps:
+      - name: Checkout private Flutter repository
+        uses: actions/checkout@v6
+        with: 
+          repository: SECRET_NAME/REPO
+          ref: main
+          token: ${{ secrets.REPO_T }}
+          path: app
+
