@@ -51,10 +51,9 @@ jobs:
         run: |
           pwd
           ls -la
-          ls -la app
 
       - name: Restore pub packages
         run: |
             flutter pub get
-        working-directory: app
+      
           
