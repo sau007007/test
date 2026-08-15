@@ -31,7 +31,7 @@ jobs:
       - name: Checkout private Flutter repository
         uses: actions/checkout@v6
         with: 
-          repository: SECRET_NAME/REPO
+          repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
           ref: main
           token: ${{ secrets.REPO_T }}
           path: app
