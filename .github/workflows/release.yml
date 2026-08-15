@@ -38,5 +38,16 @@ jobs:
           ref: main
           token: ${{ secrets.REPO_T }}
           path: app
-          
 
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # - name: Restore pub packages
+      #   run: |
+      #       flutter pub get
+          
