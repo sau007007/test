@@ -47,7 +47,14 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
+      - name: Verify Flutter project
+        run: |
+          pwd
+          ls -la
+          ls -la app
+
       - name: Restore pub packages
         run: |
             flutter pub get
+        working-directory: app
           
