@@ -15,6 +15,9 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
 
+    environment:
+      name: production
+
     defaults:
       run:
         working-directory: app
