@@ -47,7 +47,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-          
+
       - name: Restore pub packages
         run: |
             flutter pub get
@@ -71,4 +71,14 @@ jobs:
 
       - name: Run tests
         run: flutter test
+
+        
+      - name: Build iOS App Bundle
+        run: |
+          flutter build ios \
+            --release \
+            --build-name=1.0.${{ github.run_number }} \
+            --build-number=${{ github.run_number }} \
+            --no-codesign
+
 
