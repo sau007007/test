@@ -47,7 +47,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      # - name: Restore pub packages
-      #   run: |
-      #       flutter pub get
+      - name: Restore pub packages
+        run: |
+            flutter pub get
           
