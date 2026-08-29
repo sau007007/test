@@ -31,54 +31,68 @@ jobs:
 
 
     steps:
-      - name: Checkout private Flutter repository
-        uses: actions/checkout@v6
-        with: 
-          repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
-          ref: main
-          token: ${{ secrets.REPO_T }}
-          # path: app
+    
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Show macOS version
+        run: sw_vers
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+      - name: Show Xcode version
+        run: xcodebuild -version
 
-
-      - name: Restore pub packages
-        run: |
-            flutter pub get
-      
-          
-      - name: Create .env.prod
-        run: |
-          cat > .env.prod << EOF
-          COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
-          COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
-          COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
-          COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
-          EOF
-
-
-      - name: Analyze project
-        run: |
-            flutter analyze --no-fatal-infos
-            # flutter analyze
-
-
-      - name: Run tests
-        run: flutter test
+      - name: Show Flutter version
+        run: flutter --version || true
 
         
-      - name: Build iOS App Bundle
-        run: |
-          flutter build ios \
-            --release \
-            --build-name=1.0.${{ github.run_number }} \
-            --build-number=${{ github.run_number }} \
-            --no-codesign
+      # - name: Checkout private Flutter repository
+      #   uses: actions/checkout@v6
+      #   with: 
+      #     repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
+      #     ref: main
+      #     token: ${{ secrets.REPO_T }}
+      #     # path: app
+
+
+      # - name: Setup Flutter
+      #   uses: subosito/flutter-action@v2
+      #   with:
+      #     channel: stable
+      #     flutter-version: ${{ env.FLUTTER_VERSION }}
+      #     cache: true
+
+
+      # - name: Restore pub packages
+      #   run: |
+      #       flutter pub get
+      
+          
+      # - name: Create .env.prod
+      #   run: |
+      #     cat > .env.prod << EOF
+      #     COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
+      #     COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
+      #     COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
+      #     COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
+      #     EOF
+
+
+      # - name: Analyze project
+      #   run: |
+      #       flutter analyze --no-fatal-infos
+      #       # flutter analyze
+
+
+      # - name: Run tests
+      #   run: flutter test
+
+        
+      # - name: Build iOS App Bundle
+      #   run: |
+      #     flutter build ios \
+      #       --release \
+      #       --build-name=1.0.${{ github.run_number }} \
+      #       --build-number=${{ github.run_number }} \
+      #       --no-codesign
 
 
