@@ -86,54 +86,54 @@ jobs:
 
         
 
-      # - name: Install CocoaPods
-      #   working-directory: ios
-      #   run: pod install
+      - name: Install CocoaPods
+        working-directory: app/ios
+        run: pod install
 
         
-      # # -----------------------------------------
-      # # 7. Create temporary keychain
-      # # -----------------------------------------
+      # -----------------------------------------
+      # 7. Create temporary keychain
+      # -----------------------------------------
 
-      # - name: Create temporary keychain
-      #   env:
-      #     KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      #   run: |
+      - name: Create temporary keychain
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
 
-      #     KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-      #     security create-keychain \
-      #       -p "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
+          security create-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
 
-      #     security set-keychain-settings \
-      #       -lut 21600 \
-      #       "$KEYCHAIN_PATH"
+          security set-keychain-settings \
+            -lut 21600 \
+            "$KEYCHAIN_PATH"
 
-      #     security unlock-keychain \
-      #       -p "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
+          security unlock-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
 
-      #     security list-keychains \
-      #       -d user \
-      #       -s "$KEYCHAIN_PATH"
+          security list-keychains \
+            -d user \
+            -s "$KEYCHAIN_PATH"
 
 
 
-      # # -----------------------------------------
-      # # 8. Decode certificate
-      # # -----------------------------------------
+      # -----------------------------------------
+      # 8. Decode certificate
+      # -----------------------------------------
 
-      # - name: Decode Apple certificate
-      #   env:
-      #     BUILD_CERTIFICATE_BASE64: ${{ secrets.BC_BASE64 }}
-      #   run: |
+      - name: Decode Apple certificate
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BC_BASE64 }}
+        run: |
 
-      #     CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
 
-      #     echo -n "$BUILD_CERTIFICATE_BASE64" \
-      #       | base64 --decode \
-      #       -o "$CERTIFICATE_PATH"
+          echo -n "$BUILD_CERTIFICATE_BASE64" \
+            | base64 --decode \
+            -o "$CERTIFICATE_PATH"
 
 
 
