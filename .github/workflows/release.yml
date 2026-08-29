@@ -28,6 +28,12 @@ jobs:
       FLUTTER_VERSION: "3.41.9"
       JAVA_VERSION: "21"
 
+      # Apple signing
+      APPLE_TEAM_ID: "UWAQ273523"
+      APP_BUNDLE_ID: "com.omrath.app"
+      PROVISIONING_PROFILE_NAME: "Omrath-AppStore-Distribution"
+      SIGNING_CERTIFICATE: "Apple Distribution"
+
     steps:
 
       # ============================================================
@@ -40,7 +46,6 @@ jobs:
           repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
           ref: main
           token: ${{ secrets.REPO_T }}
-          # path: app
 
 
       # ============================================================
@@ -76,14 +81,15 @@ jobs:
           COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
           EOF
 
+          echo ".env.prod created."
+
 
       # ============================================================
       # 5. Analyze project
       # ============================================================
 
       # - name: Analyze project
-      #   run: |
-      #     flutter analyze --no-fatal-infos
+      #   run: flutter analyze --no-fatal-infos
 
 
       # ============================================================
@@ -100,7 +106,8 @@ jobs:
 
       - name: Install CocoaPods
         working-directory: app/ios
-        run: pod install
+        run: |
+          pod install
 
 
       # ============================================================
@@ -118,37 +125,28 @@ jobs:
           echo "Creating temporary keychain"
           echo "=========================================="
 
-          echo "Keychain path:"
-          echo "$KEYCHAIN_PATH"
-
-          # Remove an existing keychain if present
           security delete-keychain \
             "$KEYCHAIN_PATH" \
             2>/dev/null || true
 
-          # Create keychain
           security create-keychain \
             -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
-          # Keep keychain unlocked for 6 hours
           security set-keychain-settings \
             -lut 21600 \
             "$KEYCHAIN_PATH"
 
-          # Unlock keychain
           security unlock-keychain \
             -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
-          # Add temporary keychain to search list
           security list-keychains \
             -d user \
             -s \
             "$KEYCHAIN_PATH" \
             "$HOME/Library/Keychains/login.keychain-db"
 
-          # Make temporary keychain default
           security default-keychain \
             -s "$KEYCHAIN_PATH"
 
@@ -173,7 +171,6 @@ jobs:
         run: |
 
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
-
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
           echo "=========================================="
@@ -184,8 +181,6 @@ jobs:
             | base64 --decode \
             -o "$CERTIFICATE_PATH"
 
-          echo ""
-          echo "Certificate file:"
           ls -lh "$CERTIFICATE_PATH"
 
           echo ""
@@ -212,7 +207,6 @@ jobs:
             -k "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
-          # Unlock again after import
           security unlock-keychain \
             -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
@@ -270,7 +264,7 @@ jobs:
             -o "$PP_PATH"
 
           echo ""
-          echo "Provisioning profile file:"
+          echo "Provisioning profile:"
           ls -lh "$PP_PATH"
 
           cp \
@@ -278,7 +272,7 @@ jobs:
             "$PROFILE_DIR/"
 
           echo ""
-          echo "Installed provisioning profiles:"
+          echo "Installed profiles:"
           ls -la "$PROFILE_DIR"
 
 
@@ -290,7 +284,6 @@ jobs:
         run: |
 
           PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
-
           PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
 
           echo "=========================================="
@@ -323,9 +316,17 @@ jobs:
             -c "Print :Entitlements:com.apple.developer.team-identifier" \
             "$PROFILE_PLIST"
 
+          echo ""
+          echo "Provisioned devices:"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :ProvisionedDevices" \
+            "$PROFILE_PLIST" \
+            2>/dev/null || echo "App Store profile - no device list"
+
 
       # ============================================================
-      # 13. Check Flutter/Xcode Bundle ID
+      # 13. Check Bundle ID
       # ============================================================
 
       - name: Check iOS Bundle ID
@@ -358,44 +359,16 @@ jobs:
 
 
       # ============================================================
-      # 15. Check Xcode signing environment
+      # 15. Verify Release signing configuration
       # ============================================================
 
-      - name: Check Xcode signing environment
-        run: |
-
-          echo "=========================================="
-          echo "Xcode version"
-          echo "=========================================="
-
-          xcodebuild -version
-
-          echo ""
-          echo "=========================================="
-          echo "Code signing identities"
-          echo "=========================================="
-
-          security find-identity \
-            -v \
-            -p codesigning
-
-          echo ""
-          echo "=========================================="
-          echo "Provisioning profiles"
-          echo "=========================================="
-
-          ls -la \
-            "$HOME/Library/MobileDevice/Provisioning Profiles"
-
-
       - name: Verify Release signing configuration
-        working-directory: app
         run: |
-      
+
           echo "=========================================="
           echo "Release signing configuration"
           echo "=========================================="
-      
+
           xcodebuild \
             -project ios/Runner.xcodeproj \
             -target Runner \
@@ -404,40 +377,232 @@ jobs:
             | grep -E \
               "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER"
 
-        
+
       # ============================================================
-      # 16. Build IPA
+      # 16. Build Flutter iOS
       # ============================================================
 
-      - name: Build iOS IPA
+      - name: Build Flutter iOS
         run: |
 
           echo "=========================================="
-          echo "Building iOS IPA"
+          echo "Building Flutter iOS"
           echo "=========================================="
 
-          flutter build ipa \
+          flutter build ios \
             --release \
-            --export-method app-store
-
+            --build-name=1.0.0 \
+            --build-number=${{ github.run_number }} \
+            --no-codesign
 
 
       # ============================================================
-      # 17. Verify IPA
+      # 17. Archive iOS application
+      # ============================================================
+
+      - name: Archive iOS application
+        run: |
+
+          echo "=========================================="
+          echo "Archiving iOS application"
+          echo "=========================================="
+
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+
+          mkdir -p "$PWD/build/ios/archive"
+
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME"
+
+          echo ""
+          echo "=========================================="
+          echo "Archive created"
+          echo "=========================================="
+
+          ls -lah "$ARCHIVE_PATH"
+
+
+      # ============================================================
+      # 18. Verify archive
+      # ============================================================
+
+      - name: Verify archive
+        run: |
+
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+
+          echo "=========================================="
+          echo "Verifying archive"
+          echo "=========================================="
+
+          if [ ! -d "$ARCHIVE_PATH" ]; then
+            echo "ERROR: Archive does not exist."
+            exit 1
+          fi
+
+          echo ""
+          echo "Archive:"
+          ls -lah "$ARCHIVE_PATH"
+
+          echo ""
+          echo "Application:"
+          ls -lah \
+            "$ARCHIVE_PATH/Products/Applications/"
+
+
+      # ============================================================
+      # 19. Create ExportOptions.plist
+      # ============================================================
+
+      - name: Create ExportOptions.plist
+        run: |
+
+          EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
+
+          echo "=========================================="
+          echo "Creating ExportOptions.plist"
+          echo "=========================================="
+
+          cat > "$EXPORT_OPTIONS" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+
+              <key>method</key>
+              <string>app-store</string>
+
+              <key>signingStyle</key>
+              <string>manual</string>
+
+              <key>teamID</key>
+              <string>${APPLE_TEAM_ID}</string>
+
+              <key>signingCertificate</key>
+              <string>${SIGNING_CERTIFICATE}</string>
+
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>${APP_BUNDLE_ID}</key>
+                  <string>${PROVISIONING_PROFILE_NAME}</string>
+              </dict>
+
+              <key>destination</key>
+              <string>export</string>
+
+          </dict>
+          </plist>
+          EOF
+
+          echo ""
+          echo "ExportOptions.plist:"
+          cat "$EXPORT_OPTIONS"
+
+
+      # ============================================================
+      # 20. Export App Store IPA
+      # ============================================================
+
+      - name: Export App Store IPA
+        run: |
+
+          set -o pipefail
+
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+          EXPORT_PATH="$PWD/build/ios/ipa"
+          EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
+
+          echo "=========================================="
+          echo "Exporting App Store IPA"
+          echo "=========================================="
+
+          echo ""
+          echo "Archive:"
+          echo "$ARCHIVE_PATH"
+
+          echo ""
+          echo "Export path:"
+          echo "$EXPORT_PATH"
+
+          echo ""
+          echo "Export options:"
+          echo "$EXPORT_OPTIONS"
+
+          if [ ! -d "$ARCHIVE_PATH" ]; then
+            echo "ERROR: Archive does not exist."
+            exit 1
+          fi
+
+          if [ ! -f "$EXPORT_OPTIONS" ]; then
+            echo "ERROR: ExportOptions.plist does not exist."
+            exit 1
+          fi
+
+          mkdir -p "$EXPORT_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Running xcodebuild -exportArchive"
+          echo "=========================================="
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$EXPORT_OPTIONS" \
+            | tee "$RUNNER_TEMP/xcode-export.log"
+
+          echo ""
+          echo "=========================================="
+          echo "Export completed"
+          echo "=========================================="
+
+          echo "Export directory:"
+          ls -lah "$EXPORT_PATH"
+
+
+      # ============================================================
+      # 21. Verify IPA
       # ============================================================
 
       - name: Verify IPA
         run: |
 
+          IPA_PATH="$PWD/build/ios/ipa"
+
           echo "=========================================="
           echo "Generated IPA"
           echo "=========================================="
 
-          ls -lah build/ios/ipa/
+          if [ ! -d "$IPA_PATH" ]; then
+            echo "ERROR: IPA directory does not exist."
+            exit 1
+          fi
+
+          ls -lah "$IPA_PATH"
+
+          IPA_COUNT=$(find "$IPA_PATH" -name "*.ipa" | wc -l | tr -d ' ')
+
+          echo ""
+          echo "IPA files found: $IPA_COUNT"
+
+          if [ "$IPA_COUNT" -eq 0 ]; then
+            echo "ERROR: No IPA file was generated."
+            exit 1
+          fi
 
 
       # ============================================================
-      # 18. Upload to TestFlight
+      # 22. Upload to TestFlight
       # ============================================================
 
       - name: Upload to TestFlight
@@ -453,8 +618,25 @@ jobs:
 
           mkdir -p "$RUNNER_TEMP/private_keys"
 
+          KEY_PATH="$RUNNER_TEMP/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+
           printf '%s' "$APPSTORE_PRIVATE_KEY" \
-            > "$RUNNER_TEMP/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+            > "$KEY_PATH"
+
+          chmod 600 "$KEY_PATH"
+
+          echo ""
+          echo "API key created:"
+          ls -lh "$KEY_PATH"
+
+          echo ""
+          echo "IPA:"
+          ls -lah build/ios/ipa/*.ipa
+
+          echo ""
+          echo "=========================================="
+          echo "Uploading..."
+          echo "=========================================="
 
           xcrun altool \
             --upload-app \
@@ -463,9 +645,14 @@ jobs:
             --apiKey "$APPSTORE_KEY_ID" \
             --apiIssuer "$APPSTORE_ISSUER_ID"
 
+          echo ""
+          echo "=========================================="
+          echo "Upload command completed"
+          echo "=========================================="
+
 
       # ============================================================
-      # 19. Cleanup
+      # 23. Cleanup
       # ============================================================
 
       - name: Cleanup signing files
@@ -478,20 +665,16 @@ jobs:
 
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-          # Delete temporary keychain
           security delete-keychain \
             "$KEYCHAIN_PATH" \
             2>/dev/null || true
 
-          # Delete certificate
           rm -f \
             "$RUNNER_TEMP/build_certificate.p12"
 
-          # Delete provisioning profile
           rm -f \
             "$RUNNER_TEMP/build_pp.mobileprovision"
 
-          # Delete App Store Connect API key
           rm -rf \
             "$RUNNER_TEMP/private_keys"
 
