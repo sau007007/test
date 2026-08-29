@@ -388,6 +388,23 @@ jobs:
             "$HOME/Library/MobileDevice/Provisioning Profiles"
 
 
+      - name: Verify Release signing configuration
+        working-directory: app
+        run: |
+      
+          echo "=========================================="
+          echo "Release signing configuration"
+          echo "=========================================="
+      
+          xcodebuild \
+            -project ios/Runner.xcodeproj \
+            -target Runner \
+            -configuration Release \
+            -showBuildSettings \
+            | grep -E \
+              "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER"
+
+        
       # ============================================================
       # 16. Build IPA
       # ============================================================
