@@ -47,79 +47,31 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+         
 
-
-
-      - name: Show macOS version
-        run: sw_vers
-
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: Show Swift version
-        run: swift --version
-
-      - name: Show Flutter version
-        run: flutter --version || true
-        
-
-
-
-      - name: Create private key
+      - name: Restore pub packages
         run: |
-          openssl genrsa \
-            -out "$RUNNER_TEMP/distribution_private.key" \
-            2048
-
-      - name: Create CSR
-        run: |
-          openssl req \
-            -new \
-            -key "$RUNNER_TEMP/distribution_private.key" \
-            -out "$RUNNER_TEMP/distribution.certSigningRequest" \
-            -subj "/emailAddress=sau007007@gmail.com/CN=Omrath Distribution/C=IN"
-
-      - name: Package signing request
-        run: |
-          cd "$RUNNER_TEMP"
-
-          zip \
-            signing-request.zip \
-            distribution_private.key \
-            distribution.certSigningRequest
-
-      - name: Upload signing request
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-signing-request
-          path: ${{ runner.temp }}/signing-request.zip
-          retention-days: 1
-
-          
-
-      # - name: Restore pub packages
-      #   run: |
-      #       flutter pub get
+            flutter pub get
       
           
-      # - name: Create .env.prod
-      #   run: |
-      #     cat > .env.prod << EOF
-      #     COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
-      #     COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
-      #     COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
-      #     COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
-      #     EOF
+      - name: Create .env.prod
+        run: |
+          cat > .env.prod << EOF
+          COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
+          COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
+          COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
+          COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
+          EOF
 
 
-      # - name: Analyze project
-      #   run: |
-      #       flutter analyze --no-fatal-infos
-      #       # flutter analyze
+      - name: Analyze project
+        run: |
+            flutter analyze --no-fatal-infos
+            # flutter analyze
 
 
-      # - name: Run tests
-      #   run: flutter test
+      - name: Run tests
+        run: flutter test
 
         
       # - name: Build iOS App Bundle
