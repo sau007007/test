@@ -429,35 +429,6 @@ jobs:
           ls -lah "$ARCHIVE_PATH"
 
           
-      # - name: Archive iOS application
-      #   run: |
-
-      #     echo "=========================================="
-      #     echo "Archiving iOS application"
-      #     echo "=========================================="
-
-      #     ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
-
-      #     mkdir -p "$PWD/build/ios/archive"
-
-      #     xcodebuild \
-      #       -workspace ios/Runner.xcworkspace \
-      #       -scheme Runner \
-      #       -configuration Release \
-      #       -archivePath "$ARCHIVE_PATH" \
-      #       archive \
-      #       CODE_SIGN_STYLE=Manual \
-      #       DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-      #       CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE" \
-      #       PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME"
-
-      #     echo ""
-      #     echo "=========================================="
-      #     echo "Archive created"
-      #     echo "=========================================="
-
-      #     ls -lah "$ARCHIVE_PATH"
-
 
       # ============================================================
       # 18. Verify archive
@@ -630,6 +601,8 @@ jobs:
           fi
 
 
+
+
       # ============================================================
       # 22. Upload to TestFlight
       # ============================================================
@@ -641,13 +614,21 @@ jobs:
           APPSTORE_PRIVATE_KEY: ${{ secrets.AS_P_K }}
         run: |
 
+          set -e
+
           echo "=========================================="
           echo "Uploading IPA to App Store Connect"
           echo "=========================================="
 
-          mkdir -p "$RUNNER_TEMP/private_keys"
+          PRIVATE_KEY_DIR="$HOME/.appstoreconnect/private_keys"
 
-          KEY_PATH="$RUNNER_TEMP/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
+          KEY_PATH="$PRIVATE_KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
+
+          IPA_PATH="$PWD/build/ios/ipa/app.ipa"
+
+          mkdir -p "$PRIVATE_KEY_DIR"
+
+          echo "Creating App Store Connect API key..."
 
           printf '%s' "$APPSTORE_PRIVATE_KEY" \
             > "$KEY_PATH"
@@ -655,29 +636,47 @@ jobs:
           chmod 600 "$KEY_PATH"
 
           echo ""
-          echo "API key created:"
+          echo "=========================================="
+          echo "Verifying API key"
+          echo "=========================================="
+
+          if [ ! -f "$KEY_PATH" ]; then
+            echo "ERROR: API key file was not created."
+            exit 1
+          fi
+
           ls -lh "$KEY_PATH"
 
           echo ""
-          echo "IPA:"
-          ls -lah build/ios/ipa/*.ipa
+          echo "=========================================="
+          echo "Verifying IPA"
+          echo "=========================================="
+
+          if [ ! -f "$IPA_PATH" ]; then
+            echo "ERROR: IPA does not exist."
+            exit 1
+          fi
+
+          ls -lh "$IPA_PATH"
 
           echo ""
           echo "=========================================="
-          echo "Uploading..."
+          echo "Uploading to App Store Connect"
           echo "=========================================="
 
           xcrun altool \
             --upload-app \
             --type ios \
-            -f build/ios/ipa/*.ipa \
+            --file "$IPA_PATH" \
             --apiKey "$APPSTORE_KEY_ID" \
             --apiIssuer "$APPSTORE_ISSUER_ID"
 
           echo ""
           echo "=========================================="
-          echo "Upload command completed"
+          echo "Upload completed"
           echo "=========================================="
+
+          
 
 
       # ============================================================
@@ -705,6 +704,6 @@ jobs:
             "$RUNNER_TEMP/build_pp.mobileprovision"
 
           rm -rf \
-            "$RUNNER_TEMP/private_keys"
+            "$HOME/.appstoreconnect/private_keys"
 
           echo "Cleanup complete."
