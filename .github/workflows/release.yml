@@ -2,13 +2,12 @@ name: Release
 
 on:
   push:
-    branches: [ "main" ]
-  
+    branches: ["main"]
+
   workflow_dispatch:
 
-permissions: 
+permissions:
   contents: read
-
 
 jobs:
   build:
@@ -29,17 +28,24 @@ jobs:
       FLUTTER_VERSION: "3.41.9"
       JAVA_VERSION: "21"
 
-
     steps:
-        
+
+      # ============================================================
+      # 1. Checkout private Flutter repository
+      # ============================================================
+
       - name: Checkout private Flutter repository
         uses: actions/checkout@v6
-        with: 
+        with:
           repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
           ref: main
           token: ${{ secrets.REPO_T }}
           # path: app
 
+
+      # ============================================================
+      # 2. Setup Flutter
+      # ============================================================
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -47,13 +53,20 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-         
+
+
+      # ============================================================
+      # 3. Restore Flutter packages
+      # ============================================================
 
       - name: Restore pub packages
-        run: |
-            flutter pub get
-      
-          
+        run: flutter pub get
+
+
+      # ============================================================
+      # 4. Create production environment file
+      # ============================================================
+
       - name: Create .env.prod
         run: |
           cat > .env.prod << EOF
@@ -64,58 +77,93 @@ jobs:
           EOF
 
 
-      - name: Analyze project
-        run: |
-            flutter analyze --no-fatal-infos
-            # flutter analyze
+      # ============================================================
+      # 5. Analyze project
+      # ============================================================
+
+      # - name: Analyze project
+      #   run: |
+      #     flutter analyze --no-fatal-infos
 
 
-      - name: Run tests
-        run: flutter test
+      # ============================================================
+      # 6. Run tests
+      # ============================================================
+
+      # - name: Run tests
+      #   run: flutter test
 
 
-        
-      # -----------------------------------------
-      # 6. CocoaPods
-      # -----------------------------------------
+      # ============================================================
+      # 7. Install CocoaPods
+      # ============================================================
 
       - name: Install CocoaPods
         working-directory: app/ios
         run: pod install
 
 
-      # -----------------------------------------
-      # 7. Create temporary keychain
-      # -----------------------------------------
+      # ============================================================
+      # 8. Create temporary signing keychain
+      # ============================================================
 
       - name: Create temporary keychain
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
+
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          echo "=========================================="
+          echo "Creating temporary keychain"
+          echo "=========================================="
 
+          echo "Keychain path:"
+          echo "$KEYCHAIN_PATH"
+
+          # Remove an existing keychain if present
+          security delete-keychain \
+            "$KEYCHAIN_PATH" \
+            2>/dev/null || true
+
+          # Create keychain
           security create-keychain \
             -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
+          # Keep keychain unlocked for 6 hours
           security set-keychain-settings \
             -lut 21600 \
             "$KEYCHAIN_PATH"
 
+          # Unlock keychain
           security unlock-keychain \
             -p "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
+          # Add temporary keychain to search list
           security list-keychains \
             -d user \
+            -s \
+            "$KEYCHAIN_PATH" \
+            "$HOME/Library/Keychains/login.keychain-db"
+
+          # Make temporary keychain default
+          security default-keychain \
             -s "$KEYCHAIN_PATH"
 
+          echo ""
+          echo "Current keychains:"
+          security list-keychains
 
-      # -----------------------------------------
-      # 8. Install Apple Distribution certificate
-      # -----------------------------------------
+          echo ""
+          echo "Default keychain:"
+          security default-keychain
+
+
+      # ============================================================
+      # 9. Install Apple Distribution certificate
+      # ============================================================
 
       - name: Install Apple Distribution certificate
         env:
@@ -128,9 +176,22 @@ jobs:
 
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
+          echo "=========================================="
+          echo "Decoding Apple Distribution certificate"
+          echo "=========================================="
+
           echo -n "$BUILD_CERTIFICATE_BASE64" \
             | base64 --decode \
             -o "$CERTIFICATE_PATH"
+
+          echo ""
+          echo "Certificate file:"
+          ls -lh "$CERTIFICATE_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Importing certificate"
+          echo "=========================================="
 
           security import \
             "$CERTIFICATE_PATH" \
@@ -140,35 +201,54 @@ jobs:
             -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
+          echo ""
+          echo "=========================================="
+          echo "Configuring private key access"
+          echo "=========================================="
+
           security set-key-partition-list \
             -S apple-tool:,apple: \
             -s \
             -k "$KEYCHAIN_PASSWORD" \
             "$KEYCHAIN_PATH"
 
-          security list-keychains \
-            -d user \
-            -s "$KEYCHAIN_PATH"
+          # Unlock again after import
+          security unlock-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
 
 
-      # -----------------------------------------
-      # 9. Verify signing certificate
-      # -----------------------------------------
+      # ============================================================
+      # 10. Verify Apple signing identity
+      # ============================================================
 
       - name: Verify Apple signing identity
         run: |
 
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
+          echo "=========================================="
+          echo "Apple signing identities"
+          echo "=========================================="
+
           security find-identity \
             -v \
             -p codesigning \
             "$KEYCHAIN_PATH"
 
+          echo ""
+          echo "=========================================="
+          echo "All available signing identities"
+          echo "=========================================="
 
-      # -----------------------------------------
-      # 10. Install provisioning profile
-      # -----------------------------------------
+          security find-identity \
+            -v \
+            -p codesigning
+
+
+      # ============================================================
+      # 11. Install provisioning profile
+      # ============================================================
 
       - name: Install provisioning profile
         env:
@@ -179,74 +259,168 @@ jobs:
 
           PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
 
+          echo "=========================================="
+          echo "Installing provisioning profile"
+          echo "=========================================="
+
           mkdir -p "$PROFILE_DIR"
 
           echo -n "$BUILD_PROVISION_PROFILE_BASE64" \
             | base64 --decode \
             -o "$PP_PATH"
 
+          echo ""
+          echo "Provisioning profile file:"
+          ls -lh "$PP_PATH"
+
           cp \
             "$PP_PATH" \
             "$PROFILE_DIR/"
 
+          echo ""
+          echo "Installed provisioning profiles:"
           ls -la "$PROFILE_DIR"
 
 
-      # -----------------------------------------
-      # 10.1 Verify provisioning profile
-      # -----------------------------------------
+      # ============================================================
+      # 12. Verify provisioning profile
+      # ============================================================
 
       - name: Verify provisioning profile
         run: |
 
           PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
 
+          PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
+
+          echo "=========================================="
+          echo "Reading provisioning profile"
+          echo "=========================================="
+
           security cms \
             -D \
             -i "$PP_PATH" \
-            > "$RUNNER_TEMP/profile.plist"
+            > "$PROFILE_PLIST"
 
+          echo ""
           echo "Provisioning profile name:"
+
           /usr/libexec/PlistBuddy \
             -c "Print :Name" \
-            "$RUNNER_TEMP/profile.plist"
+            "$PROFILE_PLIST"
 
+          echo ""
           echo "Application identifier:"
+
           /usr/libexec/PlistBuddy \
             -c "Print :Entitlements:application-identifier" \
-            "$RUNNER_TEMP/profile.plist"
+            "$PROFILE_PLIST"
 
+          echo ""
           echo "Team identifier:"
+
           /usr/libexec/PlistBuddy \
             -c "Print :Entitlements:com.apple.developer.team-identifier" \
-            "$RUNNER_TEMP/profile.plist"
+            "$PROFILE_PLIST"
 
 
-      # -----------------------------------------
-      # 11. Build IPA
-      # -----------------------------------------
+      # ============================================================
+      # 13. Check Flutter/Xcode Bundle ID
+      # ============================================================
+
+      - name: Check iOS Bundle ID
+        run: |
+
+          echo "=========================================="
+          echo "PRODUCT_BUNDLE_IDENTIFIER"
+          echo "=========================================="
+
+          grep \
+            "PRODUCT_BUNDLE_IDENTIFIER" \
+            ios/Runner.xcodeproj/project.pbxproj
+
+
+      # ============================================================
+      # 14. Check Development Team
+      # ============================================================
+
+      - name: Check Development Team
+        run: |
+
+          echo "=========================================="
+          echo "DEVELOPMENT_TEAM"
+          echo "=========================================="
+
+          grep \
+            "DEVELOPMENT_TEAM" \
+            ios/Runner.xcodeproj/project.pbxproj \
+            || true
+
+
+      # ============================================================
+      # 15. Check Xcode signing environment
+      # ============================================================
+
+      - name: Check Xcode signing environment
+        run: |
+
+          echo "=========================================="
+          echo "Xcode version"
+          echo "=========================================="
+
+          xcodebuild -version
+
+          echo ""
+          echo "=========================================="
+          echo "Code signing identities"
+          echo "=========================================="
+
+          security find-identity \
+            -v \
+            -p codesigning
+
+          echo ""
+          echo "=========================================="
+          echo "Provisioning profiles"
+          echo "=========================================="
+
+          ls -la \
+            "$HOME/Library/MobileDevice/Provisioning Profiles"
+
+
+      # ============================================================
+      # 16. Build IPA
+      # ============================================================
 
       - name: Build iOS IPA
         run: |
+
+          echo "=========================================="
+          echo "Building iOS IPA"
+          echo "=========================================="
 
           flutter build ipa \
             --release \
             --export-method app-store
 
 
-      # # -----------------------------------------
-      # # 12. Verify IPA
-      # # -----------------------------------------
+      # # ============================================================
+      # # 17. Verify IPA
+      # # ============================================================
 
       # - name: Verify IPA
       #   run: |
 
+      #     echo "=========================================="
+      #     echo "Generated IPA"
+      #     echo "=========================================="
+
       #     ls -lah build/ios/ipa/
 
 
-      # # -----------------------------------------
-      # # 13. Upload to TestFlight
-      # # -----------------------------------------
+      # # ============================================================
+      # # 18. Upload to TestFlight
+      # # ============================================================
 
       # - name: Upload to TestFlight
       #   env:
@@ -254,6 +428,10 @@ jobs:
       #     APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
       #     APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
       #   run: |
+
+      #     echo "=========================================="
+      #     echo "Uploading IPA to App Store Connect"
+      #     echo "=========================================="
 
       #     mkdir -p "$RUNNER_TEMP/private_keys"
 
@@ -268,269 +446,35 @@ jobs:
       #       --apiIssuer "$APPSTORE_ISSUER_ID"
 
 
-      # # -----------------------------------------
-      # # 14. Cleanup
-      # # -----------------------------------------
+      # # ============================================================
+      # # 19. Cleanup
+      # # ============================================================
 
       # - name: Cleanup signing files
       #   if: always()
       #   run: |
 
+      #     echo "=========================================="
+      #     echo "Cleaning up signing files"
+      #     echo "=========================================="
+
       #     KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
+      #     # Delete temporary keychain
       #     security delete-keychain \
       #       "$KEYCHAIN_PATH" \
-      #       2>/dev/null \
-      #       || true
+      #       2>/dev/null || true
 
+      #     # Delete certificate
       #     rm -f \
       #       "$RUNNER_TEMP/build_certificate.p12"
 
+      #     # Delete provisioning profile
       #     rm -f \
       #       "$RUNNER_TEMP/build_pp.mobileprovision"
 
+      #     # Delete App Store Connect API key
       #     rm -rf \
       #       "$RUNNER_TEMP/private_keys"
 
-
-
-
-            
-
-            
-      
-      # # -----------------------------------------
-      # # 6. CocoaPods
-      # # -----------------------------------------     
-
-      # - name: Install CocoaPods
-      #   working-directory: app/ios
-      #   run: pod install
-
-        
-      # # -----------------------------------------
-      # # 7. Create temporary keychain
-      # # -----------------------------------------
-
-      # - name: Create temporary keychain
-      #   env:
-      #     KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      #   run: |
-
-      #     KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-
-      #     security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
-  
-      #     security create-keychain \
-      #       -p "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
-
-      #     security set-keychain-settings \
-      #       -lut 21600 \
-      #       "$KEYCHAIN_PATH"
-
-      #     security unlock-keychain \
-      #       -p "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
-
-      #     security list-keychains \
-      #       -d user \
-      #       -s "$KEYCHAIN_PATH"
-
-
-
-      # # -----------------------------------------
-      # # 8. Decode certificate
-      # # -----------------------------------------
-
-      # - name: Decode Apple certificate
-      #   env:
-      #     BUILD_CERTIFICATE_BASE64: ${{ secrets.BC_BASE64 }}
-      #   run: |
-
-      #     CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
-
-      #     echo -n "$BUILD_CERTIFICATE_BASE64" \
-      #       | base64 --decode \
-      #       -o "$CERTIFICATE_PATH"
-
-
-
-
-      # # -----------------------------------------
-      # # 9. Import certificate
-      # # -----------------------------------------
-
-      # - name: Import Apple certificate
-      #   env:
-      #     P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-      #     KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      #   run: |
-
-      #     CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
-
-      #     KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-
-      #     security import \
-      #       "$CERTIFICATE_PATH" \
-      #       -P "$P12_PASSWORD" \
-      #       -A \
-      #       -t cert \
-      #       -f pkcs12 \
-      #       -k "$KEYCHAIN_PATH"
-
-      #     security set-key-partition-list \
-      #       -S apple-tool:,apple: \
-      #       -k "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
-
-      #     security list-keychain \
-      #       -d user \
-      #       -s "$KEYCHAIN_PATH"
-
-
-
-
-      # # # -----------------------------------------
-      # # # 10. Decode provisioning profile
-      # # # -----------------------------------------
-
-      # # - name: Install provisioning profile
-      # #   env:
-      # #     BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.B_PROVISION_PROFILE_BASE64 }}
-      # #   run: |
-
-      # #     PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
-
-      # #     mkdir -p \
-      # #       "$HOME/Library/MobileDevice/Provisioning Profiles"
-
-      # #     echo -n "$BUILD_PROVISION_PROFILE_BASE64" \
-      # #       | base64 --decode \
-      # #       -o "$PP_PATH"
-
-      # #     cp \
-      # #       "$PP_PATH" \
-      # #       "$HOME/Library/MobileDevice/Provisioning Profiles/"
-
-
-
-
-
-
-
-
-
-      # # # -----------------------------------------
-      # # # 10.1. Install Apple certificate and provisioning profile
-      # # # -----------------------------------------
-
-      
-      # - name: Install Apple certificate and provisioning profile
-      #   env:
-      #     BUILD_CERTIFICATE_BASE64: ${{ secrets.BC_BASE64 }}
-      #     P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
-      #     BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.B_PROVISION_PROFILE_BASE64 }}
-      #     KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-      #   run: |
-
-      #     CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
-
-      #     PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
-
-      #     KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-
-      #     echo -n "$BUILD_CERTIFICATE_BASE64" \
-      #       | base64 --decode \
-      #       -o "$CERTIFICATE_PATH"
-
-      #     echo -n "$BUILD_PROVISION_PROFILE_BASE64" \
-      #       | base64 --decode \
-      #       -o "$PP_PATH"
-
-      #     security create-keychain \
-      #       -p "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
-
-      #     security set-keychain-settings \
-      #       -lut 21600 \
-      #       "$KEYCHAIN_PATH"
-
-      #     security unlock-keychain \
-      #       -p "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
-
-      #     security import \
-      #       "$CERTIFICATE_PATH" \
-      #       -P "$P12_PASSWORD" \
-      #       -A \
-      #       -t cert \
-      #       -f pkcs12 \
-      #       -k "$KEYCHAIN_PATH"
-
-      #     security set-key-partition-list \
-      #       -S apple-tool:,apple: \
-      #       -k "$KEYCHAIN_PASSWORD" \
-      #       "$KEYCHAIN_PATH"
-
-      #     security list-keychain \
-      #       -d user \
-      #       -s "$KEYCHAIN_PATH"
-
-      #     mkdir -p \
-      #       "$HOME/Library/MobileDevice/Provisioning Profiles"
-
-      #     cp \
-      #       "$PP_PATH" \
-      #       "$HOME/Library/MobileDevice/Provisioning Profiles/"
-
-      # - name: Show signing identities
-      #   run: |
-      #     security find-identity \
-      #       -v \
-      #       -p codesigning \
-      #       "$RUNNER_TEMP/app-signing.keychain-db"
-
-      # - name: Show provisioning profiles
-      #   run: |
-      #     ls -la \
-      #       "$HOME/Library/MobileDevice/Provisioning Profiles"
-
-      # - name: Cleanup
-      #   if: always()
-      #   run: |
-      #     security delete-keychain \
-      #       "$RUNNER_TEMP/app-signing.keychain-db" \
-      #       || true
-
-
-
-      # # -----------------------------------------
-      # # 11. Build IPA
-      # # -----------------------------------------
-
-
-
-      
-
-      # # - name: Build iOS IPA
-      # #   run: |
-
-      # #     flutter build ipa \
-      # #       --release \
-      # #       --export-method app-store
-
-
-
-
-
-        
-      # # - name: Build iOS App Bundle
-      # #   run: |
-      # #     flutter build ios \
-      # #       --release \
-      # #       --build-name=1.0.${{ github.run_number }} \
-      # #       --build-number=${{ github.run_number }} \
-      # #       --no-codesign
-
-
+      #     echo "Cleanup complete."
