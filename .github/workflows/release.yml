@@ -419,8 +419,7 @@ jobs:
             archive \
             CODE_SIGN_STYLE=Manual \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME"
+            CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE"
 
           echo ""
           echo "=========================================="
@@ -428,6 +427,36 @@ jobs:
           echo "=========================================="
 
           ls -lah "$ARCHIVE_PATH"
+
+          
+      # - name: Archive iOS application
+      #   run: |
+
+      #     echo "=========================================="
+      #     echo "Archiving iOS application"
+      #     echo "=========================================="
+
+      #     ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+
+      #     mkdir -p "$PWD/build/ios/archive"
+
+      #     xcodebuild \
+      #       -workspace ios/Runner.xcworkspace \
+      #       -scheme Runner \
+      #       -configuration Release \
+      #       -archivePath "$ARCHIVE_PATH" \
+      #       archive \
+      #       CODE_SIGN_STYLE=Manual \
+      #       DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+      #       CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE" \
+      #       PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_NAME"
+
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Archive created"
+      #     echo "=========================================="
+
+      #     ls -lah "$ARCHIVE_PATH"
 
 
       # ============================================================
