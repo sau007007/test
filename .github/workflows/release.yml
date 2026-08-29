@@ -421,77 +421,78 @@ jobs:
             --export-method app-store
 
 
-      # # ============================================================
-      # # 17. Verify IPA
-      # # ============================================================
 
-      # - name: Verify IPA
-      #   run: |
+      # ============================================================
+      # 17. Verify IPA
+      # ============================================================
 
-      #     echo "=========================================="
-      #     echo "Generated IPA"
-      #     echo "=========================================="
+      - name: Verify IPA
+        run: |
 
-      #     ls -lah build/ios/ipa/
+          echo "=========================================="
+          echo "Generated IPA"
+          echo "=========================================="
 
-
-      # # ============================================================
-      # # 18. Upload to TestFlight
-      # # ============================================================
-
-      # - name: Upload to TestFlight
-      #   env:
-      #     APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
-      #     APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
-      #     APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
-      #   run: |
-
-      #     echo "=========================================="
-      #     echo "Uploading IPA to App Store Connect"
-      #     echo "=========================================="
-
-      #     mkdir -p "$RUNNER_TEMP/private_keys"
-
-      #     printf '%s' "$APPSTORE_PRIVATE_KEY" \
-      #       > "$RUNNER_TEMP/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
-
-      #     xcrun altool \
-      #       --upload-app \
-      #       --type ios \
-      #       -f build/ios/ipa/*.ipa \
-      #       --apiKey "$APPSTORE_KEY_ID" \
-      #       --apiIssuer "$APPSTORE_ISSUER_ID"
+          ls -lah build/ios/ipa/
 
 
-      # # ============================================================
-      # # 19. Cleanup
-      # # ============================================================
+      # ============================================================
+      # 18. Upload to TestFlight
+      # ============================================================
 
-      # - name: Cleanup signing files
-      #   if: always()
-      #   run: |
+      - name: Upload to TestFlight
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.AS_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.AS_ISSUER_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.AS_P_K }}
+        run: |
 
-      #     echo "=========================================="
-      #     echo "Cleaning up signing files"
-      #     echo "=========================================="
+          echo "=========================================="
+          echo "Uploading IPA to App Store Connect"
+          echo "=========================================="
 
-      #     KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          mkdir -p "$RUNNER_TEMP/private_keys"
 
-      #     # Delete temporary keychain
-      #     security delete-keychain \
-      #       "$KEYCHAIN_PATH" \
-      #       2>/dev/null || true
+          printf '%s' "$APPSTORE_PRIVATE_KEY" \
+            > "$RUNNER_TEMP/private_keys/AuthKey_${APPSTORE_KEY_ID}.p8"
 
-      #     # Delete certificate
-      #     rm -f \
-      #       "$RUNNER_TEMP/build_certificate.p12"
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            -f build/ios/ipa/*.ipa \
+            --apiKey "$APPSTORE_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID"
 
-      #     # Delete provisioning profile
-      #     rm -f \
-      #       "$RUNNER_TEMP/build_pp.mobileprovision"
 
-      #     # Delete App Store Connect API key
-      #     rm -rf \
-      #       "$RUNNER_TEMP/private_keys"
+      # ============================================================
+      # 19. Cleanup
+      # ============================================================
 
-      #     echo "Cleanup complete."
+      - name: Cleanup signing files
+        if: always()
+        run: |
+
+          echo "=========================================="
+          echo "Cleaning up signing files"
+          echo "=========================================="
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          # Delete temporary keychain
+          security delete-keychain \
+            "$KEYCHAIN_PATH" \
+            2>/dev/null || true
+
+          # Delete certificate
+          rm -f \
+            "$RUNNER_TEMP/build_certificate.p12"
+
+          # Delete provisioning profile
+          rm -f \
+            "$RUNNER_TEMP/build_pp.mobileprovision"
+
+          # Delete App Store Connect API key
+          rm -rf \
+            "$RUNNER_TEMP/private_keys"
+
+          echo "Cleanup complete."
