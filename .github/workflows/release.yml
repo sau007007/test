@@ -31,9 +31,24 @@ jobs:
 
 
     steps:
-    
-      - name: Checkout
-        uses: actions/checkout@v4
+        
+      - name: Checkout private Flutter repository
+        uses: actions/checkout@v6
+        with: 
+          repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
+          ref: main
+          token: ${{ secrets.REPO_T }}
+          # path: app
+
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+
 
       - name: Show macOS version
         run: sw_vers
@@ -45,22 +60,6 @@ jobs:
         run: flutter --version || true
 
         
-      # - name: Checkout private Flutter repository
-      #   uses: actions/checkout@v6
-      #   with: 
-      #     repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
-      #     ref: main
-      #     token: ${{ secrets.REPO_T }}
-      #     # path: app
-
-
-      # - name: Setup Flutter
-      #   uses: subosito/flutter-action@v2
-      #   with:
-      #     channel: stable
-      #     flutter-version: ${{ env.FLUTTER_VERSION }}
-      #     cache: true
-
 
       # - name: Restore pub packages
       #   run: |
