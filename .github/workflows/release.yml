@@ -62,7 +62,40 @@ jobs:
       - name: Show Flutter version
         run: flutter --version || true
         
-        
+
+
+
+      - name: Create private key
+        run: |
+          openssl genrsa \
+            -out "$RUNNER_TEMP/distribution_private.key" \
+            2048
+
+      - name: Create CSR
+        run: |
+          openssl req \
+            -new \
+            -key "$RUNNER_TEMP/distribution_private.key" \
+            -out "$RUNNER_TEMP/distribution.certSigningRequest" \
+            -subj "/emailAddress=sau007007@gmail.com/CN=Omrath Distribution/C=IN"
+
+      - name: Package signing request
+        run: |
+          cd "$RUNNER_TEMP"
+
+          zip \
+            signing-request.zip \
+            distribution_private.key \
+            distribution.certSigningRequest
+
+      - name: Upload signing request
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-signing-request
+          path: ${{ runner.temp }}/signing-request.zip
+          retention-days: 1
+
+          
 
       # - name: Restore pub packages
       #   run: |
