@@ -56,9 +56,12 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Show Swift version
+        run: swift --version
+
       - name: Show Flutter version
         run: flutter --version || true
-
+        
         
 
       # - name: Restore pub packages
