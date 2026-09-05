@@ -76,6 +76,7 @@ jobs:
           COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
           COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
           COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
+          BASE_URL=${{ secrets.BASE_URL }}
           EOF
 
           echo ".env.prod created."
