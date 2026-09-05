@@ -24,6 +24,7 @@ jobs:
     env:
       FLUTTER_VERSION: "3.41.9"
       JAVA_VERSION: "21"
+      BUILD_NAME: "1.0.50"
 
       # Apple signing
       APPLE_TEAM_ID: "UWAQ273523"
@@ -380,7 +381,7 @@ jobs:
       # 16. Build Flutter iOS
       # ============================================================
 
-      - name: Build Flutter iOS Version 1.0.50
+      - name: Build Flutter iOS Version Name=${{ env.BUILD_NAME }} Number=${{ github.run_number }}
         run: |
 
           echo "=========================================="
@@ -389,7 +390,7 @@ jobs:
 
           flutter build ios \
             --release \
-            --build-name=1.0.50 \
+            --build-name=${{ env.BUILD_NAME }} \
             --build-number=${{ github.run_number }} \
             --no-codesign
 
