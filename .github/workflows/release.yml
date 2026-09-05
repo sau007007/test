@@ -380,7 +380,7 @@ jobs:
       # 16. Build Flutter iOS
       # ============================================================
 
-      - name: Build Flutter iOS Version 1.0.${{ github.run_number }}
+      - name: Build Flutter iOS Version 1.0.50
         run: |
 
           echo "=========================================="
