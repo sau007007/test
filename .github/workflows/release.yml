@@ -389,7 +389,7 @@ jobs:
 
           flutter build ios \
             --release \
-            --build-name=1.0.${{ github.run_number }} \
+            --build-name=1.0.50 \
             --build-number=${{ github.run_number }} \
             --no-codesign
 
