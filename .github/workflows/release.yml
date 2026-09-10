@@ -467,6 +467,34 @@ jobs:
             "$ARCHIVE_PATH/Products/Applications/"
 
 
+
+
+      - name: Verify archived APNs entitlement
+        run: |
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/Runner.app"
+      
+          echo "=========================================="
+          echo "Checking archived app APNs entitlement"
+          echo "=========================================="
+      
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: Runner.app not found."
+            exit 1
+          fi
+      
+          codesign -d --entitlements :- "$APP_PATH" 2>/dev/null \
+            | grep -A1 "aps-environment" \
+            || {
+              echo "ERROR: aps-environment entitlement missing from archived app."
+              exit 1
+            }
+      
+          echo "APNs entitlement exists in archived app."
+
+
+
+    
       # ============================================================
       # 19. Create ExportOptions.plist
       # ============================================================
