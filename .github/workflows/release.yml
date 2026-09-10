@@ -315,6 +315,16 @@ jobs:
             -c "Print :Entitlements:com.apple.developer.team-identifier" \
             "$PROFILE_PLIST"
 
+
+          echo ""
+          echo "Push notification entitlement:"
+          
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:aps-environment" \
+            "$PROFILE_PLIST" \
+            2>/dev/null || echo "ERROR: aps-environment NOT FOUND"
+
+  
           echo ""
           echo "Provisioned devices:"
 
