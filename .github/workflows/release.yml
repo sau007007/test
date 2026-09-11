@@ -27,10 +27,10 @@ jobs:
       BUILD_NAME: "1.0.50"
 
       # Apple signing
-      APPLE_TEAM_ID: "UWAQ273523"
-      APP_BUNDLE_ID: "com.omrath.app"
-      PROVISIONING_PROFILE_NAME: "Omrath-AppStore-Distribution"
-      SIGNING_CERTIFICATE: "Apple Distribution"
+      APPLE_TEAM_ID: ${{ secrets.A_TEAM_ID }}
+      APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+      PROVISIONING_PROFILE_NAME: ${{ secrets.PROVISIONING_P_N }}
+      SIGNING_CERTIFICATE: ${{ secrets.SIGNING_CERTIFICATE }}
 
     steps:
 
