@@ -38,19 +38,20 @@ jobs:
       # 1. Checkout private Flutter repository
       # ============================================================
 
-      - name: Checkout private Flutter repository
+      - name: 1. Checkout private Flutter repository
         uses: actions/checkout@v6
         with:
           repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
           ref: main
           token: ${{ secrets.REPO_T }}
+          persist-credentials: false
 
 
       # ============================================================
       # 2. Setup Flutter
       # ============================================================
 
-      - name: Setup Flutter
+      - name: 2. Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -62,7 +63,7 @@ jobs:
       # 3. Restore Flutter packages
       # ============================================================
 
-      - name: Restore pub packages
+      - name: 3. Restore pub packages
         run: flutter pub get
 
 
@@ -70,40 +71,62 @@ jobs:
       # 4. Create production environment file
       # ============================================================
 
-      - name: Create .env.prod
+
+      - name: 4. Create .env.prod
+        env:
+          COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+          COGNITO_REDIRECT_URL: ${{ secrets.COGNITO_REDIRECT_URL }}
+          COGNITO_LOGOUT_URI: ${{ secrets.COGNITO_LOGOUT_URI }}
+          COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+          BASE_URL: ${{ secrets.BASE_URL }}
         run: |
           cat > .env.prod << EOF
-          COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
-          COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
-          COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
-          COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
-          BASE_URL=${{ secrets.BASE_URL }}
+          COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+          COGNITO_REDIRECT_URL=${COGNITO_REDIRECT_URL}
+          COGNITO_LOGOUT_URI=${COGNITO_LOGOUT_URI}
+          COGNITO_DOMAIN=${COGNITO_DOMAIN}
+          BASE_URL=${BASE_URL}
           EOF
-
+      
+          chmod 600 .env.prod
+      
           echo ".env.prod created."
+
+    
+      # - name: 4. Create .env.prod
+      #   run: |
+      #     cat > .env.prod << EOF
+      #     COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
+      #     COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
+      #     COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
+      #     COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
+      #     BASE_URL=${{ secrets.BASE_URL }}
+      #     EOF
+
+      #     echo ".env.prod created."
 
 
       # ============================================================
       # 5. Analyze project
       # ============================================================
 
-      # - name: Analyze project
-      #   run: flutter analyze --no-fatal-infos
+      - name: 5. Analyze project
+        run: flutter analyze --no-fatal-infos
 
 
       # ============================================================
       # 6. Run tests
       # ============================================================
 
-      # - name: Run tests
-      #   run: flutter test
+      - name: 6. Run tests
+        run: flutter test
 
 
       # ============================================================
       # 7. Install CocoaPods
       # ============================================================
 
-      - name: Install CocoaPods
+      - name: 7. Install CocoaPods
         working-directory: app/ios
         run: |
           pod install
@@ -113,7 +136,7 @@ jobs:
       # 8. Create temporary signing keychain
       # ============================================================
 
-      - name: Create temporary keychain
+      - name: 8. Create temporary keychain
         env:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
@@ -162,7 +185,7 @@ jobs:
       # 9. Install Apple Distribution certificate
       # ============================================================
 
-      - name: Install Apple Distribution certificate
+      - name: 9. Install Apple Distribution certificate
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BC_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -180,7 +203,7 @@ jobs:
             | base64 --decode \
             -o "$CERTIFICATE_PATH"
 
-          ls -lh "$CERTIFICATE_PATH"
+          # ls -lh "$CERTIFICATE_PATH"
 
           echo ""
           echo "=========================================="
@@ -215,7 +238,7 @@ jobs:
       # 10. Verify Apple signing identity
       # ============================================================
 
-      - name: Verify Apple signing identity
+      - name: 10. Verify Apple signing identity
         run: |
 
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
@@ -243,7 +266,7 @@ jobs:
       # 11. Install provisioning profile
       # ============================================================
 
-      - name: Install provisioning profile
+      - name: 11. Install provisioning profile
         env:
           BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.B_PROVISION_PROFILE_BASE64 }}
         run: |
@@ -264,7 +287,7 @@ jobs:
 
           echo ""
           echo "Provisioning profile:"
-          ls -lh "$PP_PATH"
+          # ls -lh "$PP_PATH"
 
           cp \
             "$PP_PATH" \
@@ -272,14 +295,14 @@ jobs:
 
           echo ""
           echo "Installed profiles:"
-          ls -la "$PROFILE_DIR"
+          # ls -la "$PROFILE_DIR"
 
 
       # ============================================================
       # 12. Verify provisioning profile
       # ============================================================
 
-      - name: Verify provisioning profile
+      - name: 12. Verify provisioning profile
         run: |
 
           PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
@@ -338,7 +361,7 @@ jobs:
       # 13. Check Bundle ID
       # ============================================================
 
-      - name: Check iOS Bundle ID
+      - name: 13. Check iOS Bundle ID
         run: |
 
           echo "=========================================="
@@ -354,7 +377,7 @@ jobs:
       # 14. Check Development Team
       # ============================================================
 
-      - name: Check Development Team
+      - name: 14. Check Development Team
         run: |
 
           echo "=========================================="
@@ -371,7 +394,7 @@ jobs:
       # 15. Verify Release signing configuration
       # ============================================================
 
-      - name: Verify Release signing configuration
+      - name: 15. Verify Release signing configuration
         run: |
 
           echo "=========================================="
@@ -391,7 +414,7 @@ jobs:
       # 16. Build Flutter iOS
       # ============================================================
 
-      - name: Build Flutter iOS Version Name=${{ env.BUILD_NAME }} Number=${{ github.run_number }}
+      - name: 16. Build Flutter iOS Version Name=${{ env.BUILD_NAME }} Number=${{ github.run_number }}
         run: |
 
           echo "=========================================="
@@ -409,7 +432,7 @@ jobs:
       # 17. Archive iOS application
       # ============================================================
 
-      - name: Archive iOS application
+      - name: 17. Archive iOS application
         run: |
 
           echo "=========================================="
@@ -443,7 +466,7 @@ jobs:
       # 18. Verify archive
       # ============================================================
 
-      - name: Verify archive
+      - name: 18. Verify archive
         run: |
 
           ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
@@ -469,7 +492,7 @@ jobs:
 
 
 
-      - name: Verify archived APNs entitlement
+      - name: 18.1 Verify archived APNs entitlement
         run: |
           ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
           APP_PATH="$ARCHIVE_PATH/Products/Applications/Runner.app"
@@ -499,7 +522,7 @@ jobs:
       # 19. Create ExportOptions.plist
       # ============================================================
 
-      - name: Create ExportOptions.plist
+      - name: 19. Create ExportOptions.plist
         run: |
 
           EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
@@ -549,7 +572,7 @@ jobs:
       # 20. Export App Store IPA
       # ============================================================
 
-      - name: Export App Store IPA
+      - name: 20. Export App Store IPA
         run: |
 
           set -o pipefail
@@ -611,7 +634,7 @@ jobs:
       # 21. Verify IPA
       # ============================================================
 
-      - name: Verify IPA
+      - name: 21. Verify IPA
         run: |
 
           IPA_PATH="$PWD/build/ios/ipa"
@@ -644,7 +667,7 @@ jobs:
       # 22. Upload to TestFlight
       # ============================================================
 
-      - name: Upload to TestFlight
+      - name: 22. Upload to TestFlight
         env:
           APPSTORE_KEY_ID: ${{ secrets.AS_KEY_ID }}
           APPSTORE_ISSUER_ID: ${{ secrets.AS_ISSUER_ID }}
@@ -720,7 +743,7 @@ jobs:
       # 23. Cleanup
       # ============================================================
 
-      - name: Cleanup signing files
+      - name: 23. Cleanup signing files
         if: always()
         run: |
 
