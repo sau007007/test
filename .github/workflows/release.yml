@@ -684,7 +684,9 @@ jobs:
 
           KEY_PATH="$PRIVATE_KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
 
-          IPA_PATH="$PWD/build/ios/ipa/app.ipa"
+          ### IPA_PATH="$PWD/build/ios/ipa/app.ipa"
+
+          IPA_PATH="$PWD/build/ios/ipa/Omrath.ipa"
 
           mkdir -p "$PRIVATE_KEY_DIR"
 
