@@ -24,7 +24,7 @@ jobs:
     env:
       FLUTTER_VERSION: "3.41.9"
       JAVA_VERSION: "21"
-      BUILD_NAME: "1.0.50"
+      BUILD_NAME: "1.0.100"
 
       # Apple signing
       APPLE_TEAM_ID: ${{ secrets.A_TEAM_ID }}
