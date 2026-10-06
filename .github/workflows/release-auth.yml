@@ -1,0 +1,771 @@
+name: Release Auth
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    environment:
+      name: production
+
+    defaults:
+      run:
+        working-directory: app_auth
+
+    permissions:
+      contents: read
+
+    env:
+      FLUTTER_VERSION: "3.41.9"
+      JAVA_VERSION: "21"
+      BUILD_NAME: "1.0.50"
+
+      # Apple signing
+      APPLE_TEAM_ID: ${{ secrets.A_TEAM_ID }}
+      APP_BUNDLE_ID: ${{ secrets.APP_BUNDLE_ID }}
+      PROVISIONING_PROFILE_NAME: ${{ secrets.PROVISIONING_P_N }}
+      SIGNING_CERTIFICATE: ${{ secrets.SIGNING_CERTIFICATE }}
+
+    steps:
+
+      # ============================================================
+      # 1. Checkout private Flutter repository
+      # ============================================================
+
+      - name: 1. Checkout private Flutter repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ secrets.SECRET_NAME }}/${{ secrets.REPO }}
+          ref: main
+          token: ${{ secrets.REPO_T }}
+          persist-credentials: false
+
+
+      # ============================================================
+      # 2. Setup Flutter
+      # ============================================================
+
+      - name: 2. Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+
+      # ============================================================
+      # 3. Restore Flutter packages
+      # ============================================================
+
+      - name: 3. Restore pub packages
+        run: flutter pub get
+
+
+      # ============================================================
+      # 4. Create production environment file
+      # ============================================================
+
+
+      - name: 4. Create .env.prod
+        env:
+          COGNITO_CLIENT_ID: ${{ secrets.COGNITO_CLIENT_ID }}
+          COGNITO_REDIRECT_URL: ${{ secrets.COGNITO_REDIRECT_URL }}
+          COGNITO_LOGOUT_URI: ${{ secrets.COGNITO_LOGOUT_URI }}
+          COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+        run: |
+          cat > .env.prod << EOF
+          COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+          COGNITO_REDIRECT_URL=${COGNITO_REDIRECT_URL}
+          COGNITO_LOGOUT_URI=${COGNITO_LOGOUT_URI}
+          COGNITO_DOMAIN=${COGNITO_DOMAIN}
+          BASE_URL=${BASE_URL}
+          EOF
+      
+          chmod 600 .env.prod
+      
+          echo ".env.prod created."
+
+    
+      # - name: 4. Create .env.prod
+      #   run: |
+      #     cat > .env.prod << EOF
+      #     COGNITO_CLIENT_ID=${{ secrets.COGNITO_CLIENT_ID }}
+      #     COGNITO_REDIRECT_URL=${{ secrets.COGNITO_REDIRECT_URL }}
+      #     COGNITO_LOGOUT_URI=${{ secrets.COGNITO_LOGOUT_URI }}
+      #     COGNITO_DOMAIN=${{ secrets.COGNITO_DOMAIN }}
+      #     BASE_URL=${{ secrets.BASE_URL }}
+      #     EOF
+
+      #     echo ".env.prod created."
+
+
+      # ============================================================
+      # 5. Analyze project
+      # ============================================================
+
+      - name: 5. Analyze project
+        run: flutter analyze --no-fatal-infos
+
+
+      # ============================================================
+      # 6. Run tests
+      # ============================================================
+
+      - name: 6. Run tests
+        run: flutter test
+
+
+      # ============================================================
+      # 7. Install CocoaPods
+      # ============================================================
+
+      - name: 7. Install CocoaPods
+        working-directory: app_auth/ios
+        run: |
+          pod install
+
+
+      # ============================================================
+      # 8. Create temporary signing keychain
+      # ============================================================
+
+      - name: 8. Create temporary keychain
+        env:
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "=========================================="
+          echo "Creating temporary keychain"
+          echo "=========================================="
+
+          security delete-keychain \
+            "$KEYCHAIN_PATH" \
+            2>/dev/null || true
+
+          security create-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          security set-keychain-settings \
+            -lut 21600 \
+            "$KEYCHAIN_PATH"
+
+          security unlock-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          security list-keychains \
+            -d user \
+            -s \
+            "$KEYCHAIN_PATH" \
+            "$HOME/Library/Keychains/login.keychain-db"
+
+          security default-keychain \
+            -s "$KEYCHAIN_PATH"
+
+          echo ""
+          echo "Current keychains:"
+          security list-keychains
+
+          echo ""
+          echo "Default keychain:"
+          security default-keychain
+
+
+      # ============================================================
+      # 9. Install Apple Distribution certificate
+      # ============================================================
+
+      - name: 9. Install Apple Distribution certificate
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BC_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "=========================================="
+          echo "Decoding Apple Distribution certificate"
+          echo "=========================================="
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" \
+            | base64 --decode \
+            -o "$CERTIFICATE_PATH"
+
+          # ls -lh "$CERTIFICATE_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Importing certificate"
+          echo "=========================================="
+
+          security import \
+            "$CERTIFICATE_PATH" \
+            -P "$P12_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Configuring private key access"
+          echo "=========================================="
+
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          security unlock-keychain \
+            -p "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+
+      # ============================================================
+      # 10. Verify Apple signing identity
+      # ============================================================
+
+      - name: 10. Verify Apple signing identity
+        run: |
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo "=========================================="
+          echo "Apple signing identities"
+          echo "=========================================="
+
+          security find-identity \
+            -v \
+            -p codesigning \
+            "$KEYCHAIN_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "All available signing identities"
+          echo "=========================================="
+
+          security find-identity \
+            -v \
+            -p codesigning
+
+
+      # ============================================================
+      # 11. Install provisioning profile
+      # ============================================================
+
+      - name: 11. Install provisioning profile
+        env:
+          BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.B_PROVISION_PROFILE_BASE64 }}
+        run: |
+
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+
+          echo "=========================================="
+          echo "Installing provisioning profile"
+          echo "=========================================="
+
+          mkdir -p "$PROFILE_DIR"
+
+          echo -n "$BUILD_PROVISION_PROFILE_BASE64" \
+            | base64 --decode \
+            -o "$PP_PATH"
+
+          echo ""
+          echo "Provisioning profile:"
+          # ls -lh "$PP_PATH"
+
+          cp \
+            "$PP_PATH" \
+            "$PROFILE_DIR/"
+
+          echo ""
+          echo "Installed profiles:"
+          # ls -la "$PROFILE_DIR"
+
+
+      # ============================================================
+      # 12. Verify provisioning profile
+      # ============================================================
+
+      - name: 12. Verify provisioning profile
+        run: |
+
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          PROFILE_PLIST="$RUNNER_TEMP/profile.plist"
+
+          echo "=========================================="
+          echo "Reading provisioning profile"
+          echo "=========================================="
+
+          security cms \
+            -D \
+            -i "$PP_PATH" \
+            > "$PROFILE_PLIST"
+
+          echo ""
+          echo "Provisioning profile name:"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Name" \
+            "$PROFILE_PLIST"
+
+          echo ""
+          echo "Application identifier:"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:application-identifier" \
+            "$PROFILE_PLIST"
+
+          echo ""
+          echo "Team identifier:"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:com.apple.developer.team-identifier" \
+            "$PROFILE_PLIST"
+
+
+          echo ""
+          echo "Push notification entitlement:"
+          
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:aps-environment" \
+            "$PROFILE_PLIST" \
+            2>/dev/null || echo "ERROR: aps-environment NOT FOUND"
+
+  
+          echo ""
+          echo "Provisioned devices:"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :ProvisionedDevices" \
+            "$PROFILE_PLIST" \
+            2>/dev/null || echo "App Store profile - no device list"
+
+
+      # ============================================================
+      # 13. Check Bundle ID
+      # ============================================================
+
+      - name: 13. Check iOS Bundle ID
+        run: |
+
+          echo "=========================================="
+          echo "PRODUCT_BUNDLE_IDENTIFIER"
+          echo "=========================================="
+
+          grep \
+            "PRODUCT_BUNDLE_IDENTIFIER" \
+            ios/Runner.xcodeproj/project.pbxproj
+
+
+      # ============================================================
+      # 14. Check Development Team
+      # ============================================================
+
+      - name: 14. Check Development Team
+        run: |
+
+          echo "=========================================="
+          echo "DEVELOPMENT_TEAM"
+          echo "=========================================="
+
+          grep \
+            "DEVELOPMENT_TEAM" \
+            ios/Runner.xcodeproj/project.pbxproj \
+            || true
+
+
+      # ============================================================
+      # 15. Verify Release signing configuration
+      # ============================================================
+
+      - name: 15. Verify Release signing configuration
+        run: |
+
+          echo "=========================================="
+          echo "Release signing configuration"
+          echo "=========================================="
+
+          xcodebuild \
+            -project ios/Runner.xcodeproj \
+            -target Runner \
+            -configuration Release \
+            -showBuildSettings \
+            | grep -E \
+              "PRODUCT_BUNDLE_IDENTIFIER|DEVELOPMENT_TEAM|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|PROVISIONING_PROFILE_SPECIFIER"
+
+
+      # ============================================================
+      # 16. Build Flutter iOS
+      # ============================================================
+
+      - name: 16. Build Flutter iOS Version Name=${{ env.BUILD_NAME }} Number=${{ github.run_number }}
+        run: |
+
+          echo "=========================================="
+          echo "Building Flutter iOS"
+          echo "=========================================="
+
+          flutter build ios \
+            --release \
+            --build-name=${{ env.BUILD_NAME }} \
+            --build-number=${{ github.run_number }} \
+            --no-codesign
+
+
+      # ============================================================
+      # 17. Archive iOS application
+      # ============================================================
+
+      - name: 17. Archive iOS application
+        run: |
+
+          echo "=========================================="
+          echo "Archiving iOS application"
+          echo "=========================================="
+
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+
+          mkdir -p "$PWD/build/ios/archive"
+
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            archive \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE"
+
+          echo ""
+          echo "=========================================="
+          echo "Archive created"
+          echo "=========================================="
+
+          ls -lah "$ARCHIVE_PATH"
+
+          
+
+      # ============================================================
+      # 18. Verify archive
+      # ============================================================
+
+      - name: 18. Verify archive
+        run: |
+
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+
+          echo "=========================================="
+          echo "Verifying archive"
+          echo "=========================================="
+
+          if [ ! -d "$ARCHIVE_PATH" ]; then
+            echo "ERROR: Archive does not exist."
+            exit 1
+          fi
+
+          echo ""
+          echo "Archive:"
+          ls -lah "$ARCHIVE_PATH"
+
+          echo ""
+          echo "Application:"
+          ls -lah \
+            "$ARCHIVE_PATH/Products/Applications/"
+
+
+
+
+      - name: 18.1 Verify archived APNs entitlement
+        run: |
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+          APP_PATH="$ARCHIVE_PATH/Products/Applications/Runner.app"
+      
+          echo "=========================================="
+          echo "Checking archived app APNs entitlement"
+          echo "=========================================="
+      
+          if [ ! -d "$APP_PATH" ]; then
+            echo "ERROR: Runner.app not found."
+            exit 1
+          fi
+      
+          codesign -d --entitlements :- "$APP_PATH" 2>/dev/null \
+            | grep -A1 "aps-environment" \
+            || {
+              echo "ERROR: aps-environment entitlement missing from archived app."
+              exit 1
+            }
+      
+          echo "APNs entitlement exists in archived app."
+
+
+
+    
+      # ============================================================
+      # 19. Create ExportOptions.plist
+      # ============================================================
+
+      - name: 19. Create ExportOptions.plist
+        run: |
+
+          EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
+
+          echo "=========================================="
+          echo "Creating ExportOptions.plist"
+          echo "=========================================="
+
+          cat > "$EXPORT_OPTIONS" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+
+              <key>method</key>
+              <string>app-store</string>
+
+              <key>signingStyle</key>
+              <string>manual</string>
+
+              <key>teamID</key>
+              <string>${APPLE_TEAM_ID}</string>
+
+              <key>signingCertificate</key>
+              <string>${SIGNING_CERTIFICATE}</string>
+
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>${APP_BUNDLE_ID}</key>
+                  <string>${PROVISIONING_PROFILE_NAME}</string>
+              </dict>
+
+              <key>destination</key>
+              <string>export</string>
+
+          </dict>
+          </plist>
+          EOF
+
+          echo ""
+          echo "ExportOptions.plist:"
+          cat "$EXPORT_OPTIONS"
+
+
+      # ============================================================
+      # 20. Export App Store IPA
+      # ============================================================
+
+      - name: 20. Export App Store IPA
+        run: |
+
+          set -o pipefail
+
+          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+          EXPORT_PATH="$PWD/build/ios/ipa"
+          EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
+
+          echo "=========================================="
+          echo "Exporting App Store IPA"
+          echo "=========================================="
+
+          echo ""
+          echo "Archive:"
+          echo "$ARCHIVE_PATH"
+
+          echo ""
+          echo "Export path:"
+          echo "$EXPORT_PATH"
+
+          echo ""
+          echo "Export options:"
+          echo "$EXPORT_OPTIONS"
+
+          if [ ! -d "$ARCHIVE_PATH" ]; then
+            echo "ERROR: Archive does not exist."
+            exit 1
+          fi
+
+          if [ ! -f "$EXPORT_OPTIONS" ]; then
+            echo "ERROR: ExportOptions.plist does not exist."
+            exit 1
+          fi
+
+          mkdir -p "$EXPORT_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Running xcodebuild -exportArchive"
+          echo "=========================================="
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$EXPORT_OPTIONS" \
+            | tee "$RUNNER_TEMP/xcode-export.log"
+
+          echo ""
+          echo "=========================================="
+          echo "Export completed"
+          echo "=========================================="
+
+          echo "Export directory:"
+          ls -lah "$EXPORT_PATH"
+
+
+      # ============================================================
+      # 21. Verify IPA
+      # ============================================================
+
+      - name: 21. Verify IPA
+        run: |
+
+          IPA_PATH="$PWD/build/ios/ipa"
+
+          echo "=========================================="
+          echo "Generated IPA"
+          echo "=========================================="
+
+          if [ ! -d "$IPA_PATH" ]; then
+            echo "ERROR: IPA directory does not exist."
+            exit 1
+          fi
+
+          ls -lah "$IPA_PATH"
+
+          IPA_COUNT=$(find "$IPA_PATH" -name "*.ipa" | wc -l | tr -d ' ')
+
+          echo ""
+          echo "IPA files found: $IPA_COUNT"
+
+          if [ "$IPA_COUNT" -eq 0 ]; then
+            echo "ERROR: No IPA file was generated."
+            exit 1
+          fi
+
+
+
+
+      # ============================================================
+      # 22. Upload to TestFlight
+      # ============================================================
+
+      - name: 22. Upload to TestFlight
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.AS_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.AS_ISSUER_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.AS_P_K }}
+        run: |
+
+          set -e
+
+          echo "=========================================="
+          echo "Uploading IPA to App Store Connect"
+          echo "=========================================="
+
+          PRIVATE_KEY_DIR="$HOME/.appstoreconnect/private_keys"
+
+          KEY_PATH="$PRIVATE_KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
+
+          ### IPA_PATH="$PWD/build/ios/ipa/app.ipa"
+
+          IPA_PATH="$PWD/build/ios/ipa/Omrath.ipa"
+
+          mkdir -p "$PRIVATE_KEY_DIR"
+
+          echo "Creating App Store Connect API key..."
+
+          printf '%s' "$APPSTORE_PRIVATE_KEY" \
+            > "$KEY_PATH"
+
+          chmod 600 "$KEY_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Verifying API key"
+          echo "=========================================="
+
+          if [ ! -f "$KEY_PATH" ]; then
+            echo "ERROR: API key file was not created."
+            exit 1
+          fi
+
+          ls -lh "$KEY_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Verifying IPA"
+          echo "=========================================="
+
+          if [ ! -f "$IPA_PATH" ]; then
+            echo "ERROR: IPA does not exist."
+            exit 1
+          fi
+
+          ls -lh "$IPA_PATH"
+
+          echo ""
+          echo "=========================================="
+          echo "Uploading to App Store Connect"
+          echo "=========================================="
+
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APPSTORE_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID"
+
+          echo ""
+          echo "=========================================="
+          echo "Upload completed"
+          echo "=========================================="
+
+          
+
+
+      # ============================================================
+      # 23. Cleanup
+      # ============================================================
+
+      - name: 23. Cleanup signing files
+        if: always()
+        run: |
+
+          echo "=========================================="
+          echo "Cleaning up signing files"
+          echo "=========================================="
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          security delete-keychain \
+            "$KEYCHAIN_PATH" \
+            2>/dev/null || true
+
+          rm -f \
+            "$RUNNER_TEMP/build_certificate.p12"
+
+          rm -f \
+            "$RUNNER_TEMP/build_pp.mobileprovision"
+
+          rm -rf \
+            "$HOME/.appstoreconnect/private_keys"
+
+          echo "Cleanup complete."
