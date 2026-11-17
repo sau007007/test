@@ -727,7 +727,6 @@ jobs:
           echo "=========================================="
 
           xcrun altool \
-            --use-old-altool \
             --upload-app \
             --type ios \
             --file "$IPA_PATH" \
