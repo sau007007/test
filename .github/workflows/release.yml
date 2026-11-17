@@ -665,17 +665,25 @@ jobs:
       # 21.a. Test
       # ============================================================
       
-      - name: Verify IPA Bundle ID
+      - name: 21.a Verify IPA Bundle ID
         run: |
-          mkdir -p /tmp/ipa_check
-          unzip -q app/build/ios/ipa/Omrath.ipa -d /tmp/ipa_check
+          IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
       
-          echo "IPA Bundle ID:"
+          echo "Checking: $IPA_PATH"
+      
+          ls -lh "$IPA_PATH"
+      
+          mkdir -p /tmp/ipa_check
+          unzip -q "$IPA_PATH" -d /tmp/ipa_check
+      
+          echo "Actual Bundle ID:"
           /usr/libexec/PlistBuddy \
             -c "Print :CFBundleIdentifier" \
             /tmp/ipa_check/Payload/Runner.app/Info.plist
       
           echo "Expected Bundle ID: $APP_BUNDLE_ID"
+
+          
     
       # ============================================================
       # 22. Upload to TestFlight
@@ -700,7 +708,9 @@ jobs:
 
           ### IPA_PATH="$PWD/build/ios/ipa/app.ipa"
 
-          IPA_PATH="$PWD/build/ios/ipa/Omrath.ipa"
+          ### IPA_PATH="$PWD/build/ios/ipa/Omrath.ipa"
+          
+          IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
 
           mkdir -p "$PRIVATE_KEY_DIR"
 
