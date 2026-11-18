@@ -664,6 +664,64 @@ jobs:
 
 
       # ============================================================
+      # 21.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
+      # ============================================================
+
+      - name: 22.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
+        run: |
+          IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
+      
+          mkdir -p /tmp/ipa_check
+          unzip -q "$IPA_PATH" -d /tmp/ipa_check
+      
+          ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy \
+            -c "Print :CFBundleIdentifier" \
+            /tmp/ipa_check/Payload/Runner.app/Info.plist)
+      
+          echo "Actual Bundle ID: $ACTUAL_BUNDLE_ID"
+          echo "Expected Bundle ID: $APP_BUNDLE_ID"
+      
+          if [ "$ACTUAL_BUNDLE_ID" != "$APP_BUNDLE_ID" ]; then
+            echo "::error::Bundle ID mismatch!"
+            exit 1
+          fi
+      
+          echo "Bundle ID verification successful."
+
+
+
+
+
+      # ============================================================
+      # 21.b. Verify IPA Bundle ID with PWD
+      # ============================================================
+
+      - name: 22.b. Verify IPA Bundle ID with PWD
+        run: |
+          IPA_PATH="$PWD/build/ios/ipa/Omrath.ipa"
+      
+          mkdir -p /tmp/ipa_check
+          unzip -q "$IPA_PATH" -d /tmp/ipa_check
+      
+          ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy \
+            -c "Print :CFBundleIdentifier" \
+            /tmp/ipa_check/Payload/Runner.app/Info.plist)
+      
+          echo "Actual Bundle ID: $ACTUAL_BUNDLE_ID"
+          echo "Expected Bundle ID: $APP_BUNDLE_ID"
+      
+          if [ "$ACTUAL_BUNDLE_ID" != "$APP_BUNDLE_ID" ]; then
+            echo "::error::Bundle ID mismatch!"
+            exit 1
+          fi
+      
+          echo "Bundle ID verification successful."
+
+
+          
+
+
+      # ============================================================
       # 22. Upload to TestFlight
       # ============================================================
 
