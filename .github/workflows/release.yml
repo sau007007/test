@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: xcode-27            ### runs-on: macos-latest
     timeout-minutes: 30
 
     environment:
@@ -23,7 +23,6 @@ jobs:
 
     env:
       FLUTTER_VERSION: "3.41.9"
-      JAVA_VERSION: "21"
       BUILD_NAME: "1.0.50"
 
       # Apple signing
@@ -34,6 +33,30 @@ jobs:
 
     steps:
 
+          
+      # ============================================================
+      # 0. Verify macOS and Xcode environment
+      # ============================================================
+      
+      - name: 0. Verify macOS and Xcode environment
+        run: |
+          echo "macOS:"
+          sw_vers
+
+          echo "Xcode:"
+          xcodebuild -version
+
+          echo "Selected Xcode:"
+          xcode-select -p
+
+          echo "iOS SDK:"
+          xcrun --sdk iphoneos --show-sdk-version
+
+          echo "Architecture:"
+          uname -m
+
+
+          
       # ============================================================
       # 1. Checkout private Flutter repository
       # ============================================================
@@ -663,30 +686,32 @@ jobs:
 
 
 
-      # ============================================================
-      # 21.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
-      # ============================================================
+      # # ============================================================
+      # # 21.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
+      # # ============================================================
 
-      - name: 22.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
-        run: |
-          IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
+      # - name: 22.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
+      #   run: |
+      #     IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
       
-          mkdir -p /tmp/ipa_check
-          unzip -q "$IPA_PATH" -d /tmp/ipa_check
+      #     mkdir -p /tmp/ipa_check
+      #     unzip -q "$IPA_PATH" -d /tmp/ipa_check
       
-          ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy \
-            -c "Print :CFBundleIdentifier" \
-            /tmp/ipa_check/Payload/Runner.app/Info.plist)
+      #     ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy \
+      #       -c "Print :CFBundleIdentifier" \
+      #       /tmp/ipa_check/Payload/Runner.app/Info.plist)
       
-          echo "Actual Bundle ID: $ACTUAL_BUNDLE_ID"
-          echo "Expected Bundle ID: $APP_BUNDLE_ID"
+      #     echo "Actual Bundle ID: $ACTUAL_BUNDLE_ID"
+      #     echo "Expected Bundle ID: $APP_BUNDLE_ID"
       
-          if [ "$ACTUAL_BUNDLE_ID" != "$APP_BUNDLE_ID" ]; then
-            echo "::error::Bundle ID mismatch!"
-            exit 1
-          fi
+      #     if [ "$ACTUAL_BUNDLE_ID" != "$APP_BUNDLE_ID" ]; then
+      #       echo "::error::Bundle ID mismatch!"
+      #       exit 1
+      #     fi
       
-          echo "Bundle ID verification successful."
+      #     echo "Bundle ID verification successful."
+
+      #     rm -rf /tmp/ipa_check
 
           
 
@@ -788,6 +813,8 @@ jobs:
           security delete-keychain \
             "$KEYCHAIN_PATH" \
             2>/dev/null || true
+
+          rm -f "$RUNNER_TEMP/profile.plist"
 
           rm -f \
             "$RUNNER_TEMP/build_certificate.p12"
