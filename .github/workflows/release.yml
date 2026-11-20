@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest            ### runs-on: xcode-27
+    runs-on: xcode-27            ### runs-on: macos-latest or xcode-27
     timeout-minutes: 30
 
     environment:
@@ -23,7 +23,7 @@ jobs:
 
     env:
       FLUTTER_VERSION: "3.41.9"
-      BUILD_NAME: "1.0.50"
+      BUILD_NAME: "1.0.51"
 
       # Apple signing
       APPLE_TEAM_ID: ${{ secrets.A_TEAM_ID }}
@@ -143,6 +143,66 @@ jobs:
 
       - name: 6. Run tests
         run: flutter test
+
+
+
+
+      # ============================================================
+      # 7.0. Create Podfile & bump iOS target to 15.0
+      # ============================================================
+
+
+      - name: 7.0. Create Podfile & bump iOS target to 15.0
+        working-directory: app/ios
+        run: |
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' Runner.xcodeproj/project.pbxproj
+          cat << 'EOF' > Podfile
+          platform :ios, '15.0'
+
+          ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+          project 'Runner', {
+            'Debug' => :debug,
+            'Profile' => :release,
+            'Release' => :release,
+          }
+
+          def flutter_root
+            generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+            unless File.exist?(generated_xcode_build_settings_path)
+              raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+            end
+
+            File.foreach(generated_xcode_build_settings_path) do |line|
+              matches = line.match(/FLUTTER_ROOT\=(.*)/)
+              return matches[1].strip if matches
+            end
+            raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+          end
+
+          require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+          flutter_ios_podfile_setup
+
+          target 'Runner' do
+            use_frameworks!
+            use_modular_headers!
+
+            flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+          end
+
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              flutter_additional_ios_build_settings(target)
+              target.build_configurations.each do |config|
+                if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.0
+                  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+                end
+              end
+            end
+          end
+          EOF
+
 
 
       # ============================================================
@@ -451,378 +511,378 @@ jobs:
             --no-codesign
 
 
-      # ============================================================
-      # 17. Archive iOS application
-      # ============================================================
+      # # ============================================================
+      # # 17. Archive iOS application
+      # # ============================================================
 
-      - name: 17. Archive iOS application
-        run: |
+      # - name: 17. Archive iOS application
+      #   run: |
 
-          echo "=========================================="
-          echo "Archiving iOS application"
-          echo "=========================================="
+      #     echo "=========================================="
+      #     echo "Archiving iOS application"
+      #     echo "=========================================="
 
-          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+      #     ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
 
-          mkdir -p "$PWD/build/ios/archive"
+      #     mkdir -p "$PWD/build/ios/archive"
 
-          xcodebuild \
-            -workspace ios/Runner.xcworkspace \
-            -scheme Runner \
-            -configuration Release \
-            -archivePath "$ARCHIVE_PATH" \
-            archive \
-            CODE_SIGN_STYLE=Manual \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE"
+      #     xcodebuild \
+      #       -workspace ios/Runner.xcworkspace \
+      #       -scheme Runner \
+      #       -configuration Release \
+      #       -archivePath "$ARCHIVE_PATH" \
+      #       archive \
+      #       CODE_SIGN_STYLE=Manual \
+      #       DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+      #       CODE_SIGN_IDENTITY="$SIGNING_CERTIFICATE"
 
-          echo ""
-          echo "=========================================="
-          echo "Archive created"
-          echo "=========================================="
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Archive created"
+      #     echo "=========================================="
 
-          ls -lah "$ARCHIVE_PATH"
+      #     ls -lah "$ARCHIVE_PATH"
 
           
 
-      # ============================================================
-      # 18. Verify archive
-      # ============================================================
+      # # ============================================================
+      # # 18. Verify archive
+      # # ============================================================
 
-      - name: 18. Verify archive
-        run: |
+      # - name: 18. Verify archive
+      #   run: |
 
-          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+      #     ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
 
-          echo "=========================================="
-          echo "Verifying archive"
-          echo "=========================================="
+      #     echo "=========================================="
+      #     echo "Verifying archive"
+      #     echo "=========================================="
 
-          if [ ! -d "$ARCHIVE_PATH" ]; then
-            echo "ERROR: Archive does not exist."
-            exit 1
-          fi
+      #     if [ ! -d "$ARCHIVE_PATH" ]; then
+      #       echo "ERROR: Archive does not exist."
+      #       exit 1
+      #     fi
 
-          echo ""
-          echo "Archive:"
-          ls -lah "$ARCHIVE_PATH"
+      #     echo ""
+      #     echo "Archive:"
+      #     ls -lah "$ARCHIVE_PATH"
 
-          echo ""
-          echo "Application:"
-          ls -lah \
-            "$ARCHIVE_PATH/Products/Applications/"
-
-
+      #     echo ""
+      #     echo "Application:"
+      #     ls -lah \
+      #       "$ARCHIVE_PATH/Products/Applications/"
 
 
-      - name: 18.1 Verify archived APNs entitlement
-        run: |
-          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
-          APP_PATH="$ARCHIVE_PATH/Products/Applications/Runner.app"
+
+
+      # - name: 18.1 Verify archived APNs entitlement
+      #   run: |
+      #     ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+      #     APP_PATH="$ARCHIVE_PATH/Products/Applications/Runner.app"
       
-          echo "=========================================="
-          echo "Checking archived app APNs entitlement"
-          echo "=========================================="
+      #     echo "=========================================="
+      #     echo "Checking archived app APNs entitlement"
+      #     echo "=========================================="
       
-          if [ ! -d "$APP_PATH" ]; then
-            echo "ERROR: Runner.app not found."
-            exit 1
-          fi
+      #     if [ ! -d "$APP_PATH" ]; then
+      #       echo "ERROR: Runner.app not found."
+      #       exit 1
+      #     fi
       
-          codesign -d --entitlements :- "$APP_PATH" 2>/dev/null \
-            | grep -A1 "aps-environment" \
-            || {
-              echo "ERROR: aps-environment entitlement missing from archived app."
-              exit 1
-            }
+      #     codesign -d --entitlements :- "$APP_PATH" 2>/dev/null \
+      #       | grep -A1 "aps-environment" \
+      #       || {
+      #         echo "ERROR: aps-environment entitlement missing from archived app."
+      #         exit 1
+      #       }
       
-          echo "APNs entitlement exists in archived app."
+      #     echo "APNs entitlement exists in archived app."
 
 
 
     
-      # ============================================================
-      # 19. Create ExportOptions.plist
-      # ============================================================
+      # # ============================================================
+      # # 19. Create ExportOptions.plist
+      # # ============================================================
 
-      - name: 19. Create ExportOptions.plist
-        run: |
+      # - name: 19. Create ExportOptions.plist
+      #   run: |
 
-          EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
+      #     EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
 
-          echo "=========================================="
-          echo "Creating ExportOptions.plist"
-          echo "=========================================="
+      #     echo "=========================================="
+      #     echo "Creating ExportOptions.plist"
+      #     echo "=========================================="
 
-          cat > "$EXPORT_OPTIONS" << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
+      #     cat > "$EXPORT_OPTIONS" << EOF
+      #     <?xml version="1.0" encoding="UTF-8"?>
+      #     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+      #     "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      #     <plist version="1.0">
+      #     <dict>
 
-              <key>method</key>
-              <string>app-store</string>
+      #         <key>method</key>
+      #         <string>app-store</string>
 
-              <key>signingStyle</key>
-              <string>manual</string>
+      #         <key>signingStyle</key>
+      #         <string>manual</string>
 
-              <key>teamID</key>
-              <string>${APPLE_TEAM_ID}</string>
+      #         <key>teamID</key>
+      #         <string>${APPLE_TEAM_ID}</string>
 
-              <key>signingCertificate</key>
-              <string>${SIGNING_CERTIFICATE}</string>
+      #         <key>signingCertificate</key>
+      #         <string>${SIGNING_CERTIFICATE}</string>
 
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>${APP_BUNDLE_ID}</key>
-                  <string>${PROVISIONING_PROFILE_NAME}</string>
-              </dict>
+      #         <key>provisioningProfiles</key>
+      #         <dict>
+      #             <key>${APP_BUNDLE_ID}</key>
+      #             <string>${PROVISIONING_PROFILE_NAME}</string>
+      #         </dict>
 
-              <key>destination</key>
-              <string>export</string>
+      #         <key>destination</key>
+      #         <string>export</string>
 
-          </dict>
-          </plist>
-          EOF
+      #     </dict>
+      #     </plist>
+      #     EOF
 
-          echo ""
-          echo "ExportOptions.plist:"
-          cat "$EXPORT_OPTIONS"
-
-
-      # ============================================================
-      # 20. Export App Store IPA
-      # ============================================================
-
-      - name: 20. Export App Store IPA
-        run: |
-
-          set -o pipefail
-
-          ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
-          EXPORT_PATH="$PWD/build/ios/ipa"
-          EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
-
-          echo "=========================================="
-          echo "Exporting App Store IPA"
-          echo "=========================================="
-
-          echo ""
-          echo "Archive:"
-          echo "$ARCHIVE_PATH"
-
-          echo ""
-          echo "Export path:"
-          echo "$EXPORT_PATH"
-
-          echo ""
-          echo "Export options:"
-          echo "$EXPORT_OPTIONS"
-
-          if [ ! -d "$ARCHIVE_PATH" ]; then
-            echo "ERROR: Archive does not exist."
-            exit 1
-          fi
-
-          if [ ! -f "$EXPORT_OPTIONS" ]; then
-            echo "ERROR: ExportOptions.plist does not exist."
-            exit 1
-          fi
-
-          mkdir -p "$EXPORT_PATH"
-
-          echo ""
-          echo "=========================================="
-          echo "Running xcodebuild -exportArchive"
-          echo "=========================================="
-
-          xcodebuild \
-            -exportArchive \
-            -archivePath "$ARCHIVE_PATH" \
-            -exportPath "$EXPORT_PATH" \
-            -exportOptionsPlist "$EXPORT_OPTIONS" \
-            | tee "$RUNNER_TEMP/xcode-export.log"
-
-          echo ""
-          echo "=========================================="
-          echo "Export completed"
-          echo "=========================================="
-
-          echo "Export directory:"
-          ls -lah "$EXPORT_PATH"
+      #     echo ""
+      #     echo "ExportOptions.plist:"
+      #     cat "$EXPORT_OPTIONS"
 
 
-      # ============================================================
-      # 21. Verify IPA
-      # ============================================================
+      # # ============================================================
+      # # 20. Export App Store IPA
+      # # ============================================================
 
-      - name: 21. Verify IPA
-        run: |
+      # - name: 20. Export App Store IPA
+      #   run: |
 
-          IPA_PATH="$PWD/build/ios/ipa"
+      #     set -o pipefail
 
-          echo "=========================================="
-          echo "Generated IPA"
-          echo "=========================================="
+      #     ARCHIVE_PATH="$PWD/build/ios/archive/Runner.xcarchive"
+      #     EXPORT_PATH="$PWD/build/ios/ipa"
+      #     EXPORT_OPTIONS="$PWD/ios/ExportOptions.plist"
 
-          if [ ! -d "$IPA_PATH" ]; then
-            echo "ERROR: IPA directory does not exist."
-            exit 1
-          fi
+      #     echo "=========================================="
+      #     echo "Exporting App Store IPA"
+      #     echo "=========================================="
 
-          ls -lah "$IPA_PATH"
+      #     echo ""
+      #     echo "Archive:"
+      #     echo "$ARCHIVE_PATH"
 
-          IPA_COUNT=$(find "$IPA_PATH" -name "*.ipa" | wc -l | tr -d ' ')
+      #     echo ""
+      #     echo "Export path:"
+      #     echo "$EXPORT_PATH"
 
-          echo ""
-          echo "IPA files found: $IPA_COUNT"
+      #     echo ""
+      #     echo "Export options:"
+      #     echo "$EXPORT_OPTIONS"
 
-          if [ "$IPA_COUNT" -eq 0 ]; then
-            echo "ERROR: No IPA file was generated."
-            exit 1
-          fi
+      #     if [ ! -d "$ARCHIVE_PATH" ]; then
+      #       echo "ERROR: Archive does not exist."
+      #       exit 1
+      #     fi
+
+      #     if [ ! -f "$EXPORT_OPTIONS" ]; then
+      #       echo "ERROR: ExportOptions.plist does not exist."
+      #       exit 1
+      #     fi
+
+      #     mkdir -p "$EXPORT_PATH"
+
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Running xcodebuild -exportArchive"
+      #     echo "=========================================="
+
+      #     xcodebuild \
+      #       -exportArchive \
+      #       -archivePath "$ARCHIVE_PATH" \
+      #       -exportPath "$EXPORT_PATH" \
+      #       -exportOptionsPlist "$EXPORT_OPTIONS" \
+      #       | tee "$RUNNER_TEMP/xcode-export.log"
+
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Export completed"
+      #     echo "=========================================="
+
+      #     echo "Export directory:"
+      #     ls -lah "$EXPORT_PATH"
+
+
+      # # ============================================================
+      # # 21. Verify IPA
+      # # ============================================================
+
+      # - name: 21. Verify IPA
+      #   run: |
+
+      #     IPA_PATH="$PWD/build/ios/ipa"
+
+      #     echo "=========================================="
+      #     echo "Generated IPA"
+      #     echo "=========================================="
+
+      #     if [ ! -d "$IPA_PATH" ]; then
+      #       echo "ERROR: IPA directory does not exist."
+      #       exit 1
+      #     fi
+
+      #     ls -lah "$IPA_PATH"
+
+      #     IPA_COUNT=$(find "$IPA_PATH" -name "*.ipa" | wc -l | tr -d ' ')
+
+      #     echo ""
+      #     echo "IPA files found: $IPA_COUNT"
+
+      #     if [ "$IPA_COUNT" -eq 0 ]; then
+      #       echo "ERROR: No IPA file was generated."
+      #       exit 1
+      #     fi
 
 
 
 
-      # ============================================================
-      # 21.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
-      # ============================================================
+      # # ============================================================
+      # # 21.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
+      # # ============================================================
 
-      - name: 22.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
-        run: |
-          IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
+      # - name: 22.a. Verify IPA Bundle ID with GITHUB_WORKSPACE
+      #   run: |
+      #     IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
       
-          mkdir -p /tmp/ipa_check
-          unzip -q "$IPA_PATH" -d /tmp/ipa_check
+      #     mkdir -p /tmp/ipa_check
+      #     unzip -q "$IPA_PATH" -d /tmp/ipa_check
       
-          ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy \
-            -c "Print :CFBundleIdentifier" \
-            /tmp/ipa_check/Payload/Runner.app/Info.plist)
+      #     ACTUAL_BUNDLE_ID=$(/usr/libexec/PlistBuddy \
+      #       -c "Print :CFBundleIdentifier" \
+      #       /tmp/ipa_check/Payload/Runner.app/Info.plist)
       
-          echo "Actual Bundle ID: $ACTUAL_BUNDLE_ID"
-          echo "Expected Bundle ID: $APP_BUNDLE_ID"
+      #     echo "Actual Bundle ID: $ACTUAL_BUNDLE_ID"
+      #     echo "Expected Bundle ID: $APP_BUNDLE_ID"
       
-          if [ "$ACTUAL_BUNDLE_ID" != "$APP_BUNDLE_ID" ]; then
-            echo "::error::Bundle ID mismatch!"
-            exit 1
-          fi
+      #     if [ "$ACTUAL_BUNDLE_ID" != "$APP_BUNDLE_ID" ]; then
+      #       echo "::error::Bundle ID mismatch!"
+      #       exit 1
+      #     fi
       
-          echo "Bundle ID verification successful."
+      #     echo "Bundle ID verification successful."
 
-          rm -rf /tmp/ipa_check
+      #     rm -rf /tmp/ipa_check
 
           
 
 
-      # ============================================================
-      # 22. Upload to TestFlight
-      # ============================================================
+      # # ============================================================
+      # # 22. Upload to TestFlight
+      # # ============================================================
 
-      - name: 22. Upload to TestFlight
-        env:
-          APPSTORE_KEY_ID: ${{ secrets.AS_KEY_ID }}
-          APPSTORE_ISSUER_ID: ${{ secrets.AS_ISSUER_ID }}
-          APPSTORE_PRIVATE_KEY: ${{ secrets.AS_P_K }}
-        run: |
+      # - name: 22. Upload to TestFlight
+      #   env:
+      #     APPSTORE_KEY_ID: ${{ secrets.AS_KEY_ID }}
+      #     APPSTORE_ISSUER_ID: ${{ secrets.AS_ISSUER_ID }}
+      #     APPSTORE_PRIVATE_KEY: ${{ secrets.AS_P_K }}
+      #   run: |
 
-          set -e
+      #     set -e
 
-          echo "=========================================="
-          echo "Uploading IPA to App Store Connect"
-          echo "=========================================="
+      #     echo "=========================================="
+      #     echo "Uploading IPA to App Store Connect"
+      #     echo "=========================================="
 
-          PRIVATE_KEY_DIR="$HOME/.appstoreconnect/private_keys"
+      #     PRIVATE_KEY_DIR="$HOME/.appstoreconnect/private_keys"
 
-          KEY_PATH="$PRIVATE_KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
+      #     KEY_PATH="$PRIVATE_KEY_DIR/AuthKey_${APPSTORE_KEY_ID}.p8"
 
-          ### IPA_PATH="$PWD/build/ios/ipa/app.ipa"
+      #     ### IPA_PATH="$PWD/build/ios/ipa/app.ipa"
 
-          ### IPA_PATH="$PWD/build/ios/ipa/Omrath.ipa"
+      #     ### IPA_PATH="$PWD/build/ios/ipa/Omrath.ipa"
 
-          IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
+      #     IPA_PATH="$GITHUB_WORKSPACE/app/build/ios/ipa/Omrath.ipa"
 
-          mkdir -p "$PRIVATE_KEY_DIR"
+      #     mkdir -p "$PRIVATE_KEY_DIR"
 
-          echo "Creating App Store Connect API key..."
+      #     echo "Creating App Store Connect API key..."
 
-          printf '%s' "$APPSTORE_PRIVATE_KEY" \
-            > "$KEY_PATH"
+      #     printf '%s' "$APPSTORE_PRIVATE_KEY" \
+      #       > "$KEY_PATH"
 
-          chmod 600 "$KEY_PATH"
+      #     chmod 600 "$KEY_PATH"
 
-          echo ""
-          echo "=========================================="
-          echo "Verifying API key"
-          echo "=========================================="
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Verifying API key"
+      #     echo "=========================================="
 
-          if [ ! -f "$KEY_PATH" ]; then
-            echo "ERROR: API key file was not created."
-            exit 1
-          fi
+      #     if [ ! -f "$KEY_PATH" ]; then
+      #       echo "ERROR: API key file was not created."
+      #       exit 1
+      #     fi
 
-          ls -lh "$KEY_PATH"
+      #     ls -lh "$KEY_PATH"
 
-          echo ""
-          echo "=========================================="
-          echo "Verifying IPA"
-          echo "=========================================="
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Verifying IPA"
+      #     echo "=========================================="
 
-          if [ ! -f "$IPA_PATH" ]; then
-            echo "ERROR: IPA does not exist."
-            exit 1
-          fi
+      #     if [ ! -f "$IPA_PATH" ]; then
+      #       echo "ERROR: IPA does not exist."
+      #       exit 1
+      #     fi
 
-          ls -lh "$IPA_PATH"
+      #     ls -lh "$IPA_PATH"
 
-          echo ""
-          echo "=========================================="
-          echo "Uploading to App Store Connect"
-          echo "=========================================="
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Uploading to App Store Connect"
+      #     echo "=========================================="
 
-          xcrun altool \
-            --upload-app \
-            --type ios \
-            --file "$IPA_PATH" \
-            --apiKey "$APPSTORE_KEY_ID" \
-            --apiIssuer "$APPSTORE_ISSUER_ID"
+      #     xcrun altool \
+      #       --upload-app \
+      #       --type ios \
+      #       --file "$IPA_PATH" \
+      #       --apiKey "$APPSTORE_KEY_ID" \
+      #       --apiIssuer "$APPSTORE_ISSUER_ID"
 
-          echo ""
-          echo "=========================================="
-          echo "Upload completed"
-          echo "=========================================="
+      #     echo ""
+      #     echo "=========================================="
+      #     echo "Upload completed"
+      #     echo "=========================================="
 
           
 
 
-      # ============================================================
-      # 23. Cleanup
-      # ============================================================
+      # # ============================================================
+      # # 23. Cleanup
+      # # ============================================================
 
-      - name: 23. Cleanup signing files
-        if: always()
-        run: |
+      # - name: 23. Cleanup signing files
+      #   if: always()
+      #   run: |
 
-          echo "=========================================="
-          echo "Cleaning up signing files"
-          echo "=========================================="
+      #     echo "=========================================="
+      #     echo "Cleaning up signing files"
+      #     echo "=========================================="
 
-          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+      #     KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
 
-          security delete-keychain \
-            "$KEYCHAIN_PATH" \
-            2>/dev/null || true
+      #     security delete-keychain \
+      #       "$KEYCHAIN_PATH" \
+      #       2>/dev/null || true
 
-          rm -f "$RUNNER_TEMP/profile.plist"
+      #     rm -f "$RUNNER_TEMP/profile.plist"
 
-          rm -f \
-            "$RUNNER_TEMP/build_certificate.p12"
+      #     rm -f \
+      #       "$RUNNER_TEMP/build_certificate.p12"
 
-          rm -f \
-            "$RUNNER_TEMP/build_pp.mobileprovision"
+      #     rm -f \
+      #       "$RUNNER_TEMP/build_pp.mobileprovision"
 
-          rm -rf \
-            "$HOME/.appstoreconnect/private_keys"
+      #     rm -rf \
+      #       "$HOME/.appstoreconnect/private_keys"
 
-          echo "Cleanup complete."
+      #     echo "Cleanup complete."
